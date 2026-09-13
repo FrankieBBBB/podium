@@ -59,7 +59,7 @@ function Stat({
 function ChannelChip({ c }: { c: DeadEntry['channels'][number] }) {
   return (
     <span
-      className={`${pill} ${
+      className={`${pill} max-w-full truncate align-middle ${
         c.rank === 1
           ? 'bg-[var(--color-bad)] text-white'
           : 'border border-[var(--color-line)] text-[var(--color-muted)]'
@@ -263,7 +263,10 @@ export function DeadView({
                       </span>
                     )}
                   </span>
-                  <span className="flex flex-none flex-wrap items-center justify-end gap-1">
+                  {/* Not flex-none: the row wraps this onto its own line on a
+                      phone, and at its unshrinkable max-content width -- every
+                      chip side by side -- it pushed the page 240px sideways. */}
+                  <span className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
                     {e.channels.map((c) =>
                       onOpenChannel ? (
                         <button
