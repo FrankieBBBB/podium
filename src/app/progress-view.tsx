@@ -196,6 +196,24 @@ export function collapseRuns(runs: RunRow[]): Entry[] {
   return out;
 }
 
+/**
+ * A failed pass, in words, for the one line the Recent passes row has room for.
+ *
+ * The raw error is what the worker caught, and for the commonest failure -- the
+ * Dispatcharr fetch -- that is undici's "TypeError: fetch failed", which says
+ * nothing about what failed. A pass only talks to Dispatcharr, so a network
+ * error is that. Anything unrecognised is passed through rather than guessed.
+ */
+export function describeRunError(error: string): string {
+  if (/fetch failed|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|UND_ERR/i.test(error)) {
+    return 'Could not reach Dispatcharr';
+  }
+  if (/\b(401|403)\b|unauthori[sz]ed|forbidden/i.test(error)) {
+    return 'Dispatcharr refused the credentials';
+  }
+  return error.slice(0, 60);
+}
+
 export function ProgressView() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -673,8 +691,8 @@ export function ProgressView() {
                   </span>
                   <span className="text-sm tabular-nums text-[var(--color-muted)]">
                     {entry.run.error ? (
-                      <span className="text-[var(--color-bad)]">
-                        {entry.run.error.slice(0, 60)}
+                      <span className="text-[var(--color-bad)]" title={entry.run.error}>
+                        {describeRunError(entry.run.error)}
                       </span>
                     ) : (
                       <>

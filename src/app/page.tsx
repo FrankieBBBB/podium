@@ -1172,30 +1172,38 @@ export default function Page() {
                       </button>
                     </div>
                   ))}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {/* The mode buttons are the submit, so they say so. Bare
+                      "Never" / "After kickoff" beside an input read as a
+                      setting, and a click saved the rule without a word. */}
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
                     <input
                       value={patternText}
                       onChange={(e) => setPatternText(e.target.value)}
                       placeholder="Auto | *"
+                      aria-label="Group name pattern"
                       className="mono min-w-0 flex-1 rounded-lg border border-[var(--color-line)] bg-[var(--color-canvas)] px-3 py-2 outline-none focus:border-[var(--color-accent)]"
                     />
-                    <button type="button" className={btn} onClick={() => void savePattern('never')}>
-                      Never
-                    </button>
-                    <button
-                      type="button"
-                      className={btn}
-                      onClick={() => void savePattern('after_epg_start')}
-                    >
-                      After kickoff
-                    </button>
-                    <button
-                      type="button"
-                      className={btn}
-                      onClick={() => void savePattern('assigned')}
-                    >
-                      Assigned
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-[var(--color-muted)]">Add as</span>
+                      {(
+                        [
+                          ['never', 'Never'],
+                          ['after_epg_start', 'After kickoff'],
+                          ['assigned', 'Assigned'],
+                        ] as const
+                      ).map(([mode, label]) => (
+                        <button
+                          type="button"
+                          key={mode}
+                          className={btn}
+                          disabled={!patternText.trim()}
+                          title={MODES.find((m) => m.value === mode)?.hint}
+                          onClick={() => void savePattern(mode)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

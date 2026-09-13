@@ -32,15 +32,17 @@ function Stat({
   text,
   sub,
   tone,
+  className = '',
 }: {
   label: string;
   value?: number;
   text?: string;
   sub?: string;
   tone?: 'bad';
+  className?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--color-line)] p-3">
+    <div className={`rounded-lg border border-[var(--color-line)] p-3 ${className}`}>
       <div
         className={`text-2xl font-semibold tabular-nums ${
           tone === 'bad' ? 'text-[var(--color-bad)]' : ''
@@ -180,7 +182,10 @@ export function DeadView({
               value={totals.orphans}
               sub="streams gone from the catalogue"
             />
+            {/* Five tiles in a grid of two or three leave a hole; the last one
+                takes up the slack until the row is wide enough for all five. */}
             <Stat
+              className="col-span-2 lg:col-span-1"
               label="Worst streak"
               value={totals.worstStreak}
               sub={

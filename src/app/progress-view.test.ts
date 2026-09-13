@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collapseRuns, laneCompleted } from './progress-view';
+import { collapseRuns, describeRunError, laneCompleted } from './progress-view';
 
 const run = (over: Partial<Parameters<typeof collapseRuns>[0][number]> = {}) => ({
   run_id: Math.random().toString(36).slice(2),
@@ -42,6 +42,27 @@ describe('recent passes', () => {
     expect(collapseRuns([run({ started_at: 100 })])).toEqual([
       { kind: 'quiet', count: 1, from: 100, to: 100 },
     ]);
+  });
+});
+
+describe('a failed pass', () => {
+  it('names the network failure undici reports only as "fetch failed"', () => {
+    expect(describeRunError('TypeError: fetch failed')).toBe('Could not reach Dispatcharr');
+    expect(describeRunError('Error: connect ECONNREFUSED 10.0.0.4:9191')).toBe(
+      'Could not reach Dispatcharr',
+    );
+  });
+
+  it('names a refused login', () => {
+    // The shape DispatcharrError takes for a non-OK response.
+    expect(describeRunError('DispatcharrError: GET /api/channels/channels/ -> 401: {}')).toBe(
+      'Dispatcharr refused the credentials',
+    );
+  });
+
+  it('passes anything it does not recognise through, cut to the row', () => {
+    const odd = `SqliteError: database is locked ${'x'.repeat(80)}`;
+    expect(describeRunError(odd)).toBe(odd.slice(0, 60));
   });
 });
 
