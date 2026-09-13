@@ -57,3 +57,23 @@ code {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+
+/* A shadow at whichever edge of a scrolling list has more beyond it, so a row
+   cut in half at the bottom reads as "scroll for more" rather than as clipped.
+   The covers scroll with the content and the shadows stay put, so each shadow
+   is hidden exactly when its end of the list is in view. Only valid on a panel
+   background, which is where every list that uses it sits. */
+@utility scroll-shadow {
+  background:
+    linear-gradient(var(--color-panel) 30%, transparent) center top,
+    linear-gradient(transparent, var(--color-panel) 70%) center bottom,
+    radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 0.14), transparent) center top,
+    radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 0.14), transparent) center bottom;
+  background-repeat: no-repeat;
+  background-size:
+    100% 40px,
+    100% 40px,
+    100% 14px,
+    100% 14px;
+  background-attachment: local, local, scroll, scroll;
+}

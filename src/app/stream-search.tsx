@@ -62,6 +62,9 @@ export function StreamSearch({
   const [total, setTotal] = useState(0);
   const [truncated, setTruncated] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Which result has its narrowing chips open. One at a time: open on every
+  // row, they were twenty pills a result with nothing saying what they did.
+  const [narrowing, setNarrowing] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const search = useCallback(async (q: string) => {
@@ -113,85 +116,104 @@ export function StreamSearch({
       </p>
 
       {hits.length > 0 && (
-        <ul className="mt-3 max-h-[360px] overflow-y-auto">
-          {hits.map((h) => (
-            <li
-              key={h.normalized}
-              className="flex flex-wrap items-start gap-3 border-b border-[var(--color-line)] py-3 last:border-0"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium">{h.normalized}</span>
-                <span className="mt-0.5 block text-sm text-[var(--color-muted)]">
-                  {h.count} stream{h.count === 1 ? '' : 's'} · {h.providers.join(', ')}
-                  {h.claimedBy && (
-                    <>
-                      {' · '}
-                      <span className="text-[var(--color-warn)]">claimed by {h.claimedBy}</span>
-                    </>
-                  )}
-                </span>
-                <span className="mono mt-1 block truncate text-xs text-[var(--color-muted)]">
-                  {h.samples[0]}
-                </span>
-                {/* The term is buried inside this name, so no alias can claim
+        <ul className="scroll-shadow mt-3 max-h-[360px] overflow-y-auto">
+          {hits.map((h) => {
+            const fragment = Boolean(onAddContains) && isFragment(query, h.normalized);
+            const canNarrow = fragment || h.prefixes.length > 1;
+            const open = narrowing === h.normalized;
+            return (
+              <li
+                key={h.normalized}
+                className="flex flex-wrap items-start gap-3 border-b border-[var(--color-line)] py-3 last:border-0"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{h.normalized}</span>
+                  <span className="mt-0.5 block text-sm text-[var(--color-muted)]">
+                    {h.count} stream{h.count === 1 ? '' : 's'} · {h.providers.join(', ')}
+                    {h.claimedBy && (
+                      <>
+                        {' · '}
+                        <span className="text-[var(--color-warn)]">claimed by {h.claimedBy}</span>
+                      </>
+                    )}
+                  </span>
+                  <span className="mono mt-1 block truncate text-xs text-[var(--color-muted)]">
+                    {h.samples[0]}
+                  </span>
+                  {/* The term is buried inside this name, so no alias can claim
                     it. Offer the section-scoped `contains` that can, and the
                     bare one only as the last resort it is. */}
-                {onAddContains && isFragment(query, h.normalized) && (
-                  <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-[var(--color-muted)]">“{query.trim()}” in:</span>
-                    {h.sections.map((s) => (
-                      <button
-                        key={s.name}
-                        type="button"
-                        title={`Add contains "${qualifier(s.name)} ${query.trim()}" — every ${
-                          s.name
-                        } stream with “${query.trim()}” in the name`}
-                        className={`${pill} mono border border-[var(--color-line)] hover:border-[var(--color-accent)]`}
-                        onClick={() => onAddContains(`${qualifier(s.name)} ${query.trim()}`)}
-                      >
-                        {s.name} <span className="text-[var(--color-muted)]">×{s.count}</span>
-                      </button>
-                    ))}
+                  {canNarrow && (
                     <button
                       type="button"
-                      title={`Add contains "${query.trim()}" — every stream with that word, in any section`}
-                      className={`${pill} mono border border-dashed border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-accent)]`}
-                      onClick={() => onAddContains(query.trim())}
+                      aria-expanded={open}
+                      className="mt-1 text-xs text-[var(--color-muted)] underline hover:text-[var(--color-accent)]"
+                      onClick={() => setNarrowing(open ? null : h.normalized)}
                     >
-                      anywhere
+                      {open ? '▾' : '▸'} Narrow to a section or region
                     </button>
-                  </span>
-                )}
-                {/* Only when there is a decision to make. One prefix, or none,
-                    means the plain alias already says everything. */}
-                {h.prefixes.length > 1 && (
-                  <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-[var(--color-muted)]">only:</span>
-                    {h.prefixes.map((p) => (
+                  )}
+                  {open && onAddContains && fragment && (
+                    <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-[var(--color-muted)]">
+                        Contains “{query.trim()}”, only in:
+                      </span>
+                      {h.sections.map((s) => (
+                        <button
+                          key={s.name}
+                          type="button"
+                          title={`Add contains "${qualifier(s.name)} ${query.trim()}" — every ${
+                            s.name
+                          } stream with “${query.trim()}” in the name`}
+                          className={`${pill} mono border border-[var(--color-line)] hover:border-[var(--color-accent)]`}
+                          onClick={() => onAddContains(`${qualifier(s.name)} ${query.trim()}`)}
+                        >
+                          {s.name} <span className="text-[var(--color-muted)]">×{s.count}</span>
+                        </button>
+                      ))}
                       <button
-                        key={p.name}
                         type="button"
-                        title={`Add "${qualifier(p.name)} ${h.normalized}" — matches the ${
-                          p.name
-                        } feed only`}
-                        className={`${pill} mono border border-[var(--color-line)] hover:border-[var(--color-accent)]`}
-                        onClick={() => onAdd(`${qualifier(p.name)} ${h.normalized}`)}
+                        title={`Add contains "${query.trim()}" — every stream with that word, in any section`}
+                        className={`${pill} mono border border-dashed border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-accent)]`}
+                        onClick={() => onAddContains(query.trim())}
                       >
-                        {p.name} <span className="text-[var(--color-muted)]">×{p.count}</span>
+                        anywhere
                       </button>
-                    ))}
-                  </span>
-                )}
-              </span>
-              <button
-                type="button"
-                className={`${btn} flex-none px-3 py-1.5 text-sm`}
-                onClick={() => onAdd(h.normalized)}
-              >
-                + alias
-              </button>
-            </li>
-          ))}
+                    </span>
+                  )}
+                  {/* Only when there is a decision to make. One prefix, or none,
+                    means the plain alias already says everything. */}
+                  {open && h.prefixes.length > 1 && (
+                    <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-[var(--color-muted)]">
+                        Alias for one region:
+                      </span>
+                      {h.prefixes.map((p) => (
+                        <button
+                          key={p.name}
+                          type="button"
+                          title={`Add "${qualifier(p.name)} ${h.normalized}" — matches the ${
+                            p.name
+                          } feed only`}
+                          className={`${pill} mono border border-[var(--color-line)] hover:border-[var(--color-accent)]`}
+                          onClick={() => onAdd(`${qualifier(p.name)} ${h.normalized}`)}
+                        >
+                          {p.name} <span className="text-[var(--color-muted)]">×{p.count}</span>
+                        </button>
+                      ))}
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className={`${btn} flex-none px-3 py-1.5 text-sm`}
+                  onClick={() => onAdd(h.normalized)}
+                >
+                  + alias
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 

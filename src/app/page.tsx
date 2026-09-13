@@ -836,10 +836,16 @@ export default function Page() {
     return [...assigned, ...newStreams];
   }, [preview]);
 
+  // A channel with nothing in its rule matches nothing, so every stream it
+  // carries came back "orphaned" -- and a channel ranked off its own assignment
+  // lit every row red on the one page that says it is being managed. There is
+  // no rule for those streams to have fallen out of, so nothing is flagged.
+  const ruleIsEmpty =
+    lines(aliases).length === 0 && lines(contains).length === 0 && !channel?.regexCount;
   const orphanedIds = useMemo(() => {
-    if (!preview) return new Set<number>();
+    if (!preview || ruleIsEmpty) return new Set<number>();
     return new Set(preview.orphaned.map((r) => r.id));
-  }, [preview]);
+  }, [preview, ruleIsEmpty]);
 
   // Every reason this fails is fixed in Settings -- a missing credential, a
   // wrong URL, a Dispatcharr that moved -- so the settings form is part of the
@@ -1541,19 +1547,43 @@ export default function Page() {
                 One per line. Casing, accents, “USA:” prefixes and “FHD H265” suffixes are handled
                 for you. Order = preference. Matches update as you type.
               </p>
-              <p className="mt-1.5 text-sm text-[var(--color-muted)]">
-                Prefix it with <code className="mono">@AU</code> to take only that region’s feed, or{' '}
-                <code className="mono">@!Prime</code> to keep one out.
-              </p>
-              <p className="mt-1.5 text-sm text-[var(--color-muted)]">
-                Suffix it with <code className="mono">~4K</code> to take only that variant, or{' '}
-                <code className="mono">~!4K</code> to keep it out —{' '}
-                <code className="mono">~1080p</code>, <code className="mono">~hevc</code>,{' '}
-                <code className="mono">~60fps</code> and <code className="mono">~raw</code> work the
-                same. Bracketed text too — <code className="mono">~!&quot;event only&quot;</code> is
-                how you keep “FS1 4K (Event Only)” out. Both ends combine:{' '}
-                <code className="mono">@AU CNN ~4K</code>.
-              </p>
+              {/* A reference, not an instruction: read once, then in the way of
+                  the list it sits above every time after. */}
+              <details className="mt-1.5 text-sm text-[var(--color-muted)]">
+                <summary className="cursor-pointer select-none hover:text-[var(--color-accent)]">
+                  Regions and variants
+                </summary>
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+                  <dt>
+                    <code className="mono">@AU CNN</code>
+                  </dt>
+                  <dd>only that region’s feed</dd>
+                  <dt>
+                    <code className="mono">@!Prime CNN</code>
+                  </dt>
+                  <dd>any region but that one</dd>
+                  <dt>
+                    <code className="mono">CNN ~4K</code>
+                  </dt>
+                  <dd>
+                    only that variant — <code className="mono">~1080p</code>,{' '}
+                    <code className="mono">~hevc</code>, <code className="mono">~60fps</code> and{' '}
+                    <code className="mono">~raw</code> work the same
+                  </dd>
+                  <dt>
+                    <code className="mono">CNN ~!4K</code>
+                  </dt>
+                  <dd>any variant but that one</dd>
+                  <dt>
+                    <code className="mono">FS1 ~!&quot;event only&quot;</code>
+                  </dt>
+                  <dd>keeps out bracketed text, like “FS1 4K (Event Only)”</dd>
+                  <dt>
+                    <code className="mono">@AU CNN ~4K</code>
+                  </dt>
+                  <dd>both ends combine</dd>
+                </dl>
+              </details>
               {removeNote && (
                 <p
                   className={`mt-3 text-sm ${
@@ -1566,7 +1596,11 @@ export default function Page() {
               {preview && unifiedRows.length > 0 && (
                 <StreamList
                   title={`Live ordering & Matched (${unifiedRows.length})`}
-                  hint="Shows the current order in Dispatcharr, followed by newly matched streams. Unmatched streams are highlighted."
+                  hint={
+                    ruleIsEmpty
+                      ? 'The current order in Dispatcharr.'
+                      : 'The current order in Dispatcharr, then newly matched streams. Streams this rule no longer matches are marked.'
+                  }
                   rows={unifiedRows}
                   tone="normal"
                   flush
@@ -1808,6 +1842,9 @@ function StreamList({
   flush?: boolean;
   orphanedIds?: Set<number>;
 }) {
+  // Removing is a write to Dispatcharr with no undo, so it takes a second click
+  // on the same row -- in place, rather than a browser dialog.
+  const [confirming, setConfirming] = useState<number | null>(null);
   return (
     <div
       className={
@@ -1824,7 +1861,7 @@ function StreamList({
         {title}
       </h3>
       {hint && <p className="mt-1.5 text-sm text-[var(--color-muted)]">{hint}</p>}
-      <ul className="mt-2 max-h-[420px] overflow-y-auto">
+      <ul className="scroll-shadow mt-2 max-h-[420px] overflow-y-auto">
         {rows.length === 0 ? (
           <li className="py-3 text-[var(--color-muted)]">Nothing here yet.</li>
         ) : (
@@ -1853,9 +1890,13 @@ function StreamList({
                       : r.assigned
                         ? ' · assigned'
                         : ' · new'}
+                    {/* Warn, not bad: the stream still plays. It is the rule that
+                        needs a look, and the two buttons beside it are the answers. */}
                     {orphaned && (
-                      <span className="ml-2 font-semibold text-[var(--color-bad)]">
-                        NOT MATCHED
+                      <span
+                        className={`${pill} ml-2 border border-[var(--color-warn)] text-[var(--color-warn)]`}
+                      >
+                        not in rule
                       </span>
                     )}
                   </span>
@@ -1900,17 +1941,39 @@ function StreamList({
                 )}
                 {/* The two answers to an unmatched stream sit together: claim
                     it with an alias, or take it off the channel. */}
-                {onRemove && orphaned && (
+                {onRemove && orphaned && confirming !== r.id && (
                   <button
                     type="button"
-                    title="Remove this stream from the channel"
+                    title="Unassign this stream from the channel in Dispatcharr"
                     aria-label={`Remove ${r.raw} from this channel`}
                     className={`${btn} flex-none px-3 py-1.5 text-sm text-[var(--color-bad)] hover:border-[var(--color-bad)]`}
                     disabled={removing === r.id}
-                    onClick={() => onRemove(r.id, r.normalized)}
+                    onClick={() => setConfirming(r.id)}
                   >
-                    {removing === r.id ? '…' : '✕'}
+                    {removing === r.id ? 'Removing…' : 'Remove'}
                   </button>
+                )}
+                {onRemove && orphaned && confirming === r.id && (
+                  <span className="flex w-full flex-wrap items-center justify-end gap-2 text-sm sm:w-auto">
+                    <span className="text-[var(--color-muted)]">Unassign in Dispatcharr?</span>
+                    <button
+                      type="button"
+                      className={`${btn} border-[var(--color-bad)] bg-[var(--color-bad)] px-3 py-1.5 text-sm text-white`}
+                      onClick={() => {
+                        setConfirming(null);
+                        onRemove(r.id, r.normalized);
+                      }}
+                    >
+                      Remove
+                    </button>
+                    <button
+                      type="button"
+                      className={`${btn} px-3 py-1.5 text-sm`}
+                      onClick={() => setConfirming(null)}
+                    >
+                      Keep
+                    </button>
+                  </span>
                 )}
               </li>
             );
