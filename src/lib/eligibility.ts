@@ -184,21 +184,65 @@ export interface GroupPattern extends GroupPolicy {
   pattern: string;
 }
 
-/** Compile a `*`/`?` glob to an anchored, case-insensitive regex. */
-export function globToRegExp(glob: string): RegExp {
-  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`^${escaped.replace(/\*/g, '.*').replace(/\?/g, '.')}$`, 'i');
+/** A compiled glob: anchored at both ends, case-insensitive. */
+export interface Glob {
+  test(name: string): boolean;
+}
+
+/**
+ * Compile a `*`/`?` glob against whole names.
+ *
+ * Not a regex, although it used to be one. `*` became `.*`, and a backtracking
+ * engine given several of those that fail near the end of a name tries every
+ * way of splitting the name between them: `*x*x*x*x*x*x*x*x*!` against sixty
+ * x's took eighteen seconds. Each pattern is tried against every group name,
+ * the event loop is single-threaded, and the web UI and the worker share it --
+ * one pasted pattern stalled everything until the process was killed.
+ *
+ * Matching a glob does not need backtracking at all. Only the most recent `*`
+ * ever has to be revisited: when an earlier one could absorb more, so could the
+ * later, so resuming from the last `*` loses no match. That makes the worst case
+ * the length of the name times the length of the pattern.
+ */
+export function compileGlob(glob: string): Glob {
+  const pattern = glob.toLowerCase();
+  return { test: (name) => globMatches(pattern, name.toLowerCase()) };
+}
+
+function globMatches(pattern: string, name: string): boolean {
+  let p = 0;
+  let n = 0;
+  // The last `*` seen, and where in the name it last started absorbing from.
+  let star = -1;
+  let resume = 0;
+  while (n < name.length) {
+    if (pattern[p] === '*') {
+      star = p++;
+      resume = n;
+    } else if (p < pattern.length && (pattern[p] === '?' || pattern[p] === name[n])) {
+      p++;
+      n++;
+    } else if (star !== -1) {
+      // Let that `*` swallow one more character, and retry what followed it.
+      p = star + 1;
+      n = ++resume;
+    } else {
+      return false;
+    }
+  }
+  while (pattern[p] === '*') p++;
+  return p === pattern.length;
 }
 
 export class Eligibility {
-  private readonly compiled: Array<{ test: RegExp; policy: GroupPattern }>;
+  private readonly compiled: Array<{ test: Glob; policy: GroupPattern }>;
 
   constructor(
     private readonly policies: Map<number, GroupPolicy>,
     private readonly fallback: GroupPolicy = DEFAULT_POLICY,
     patterns: GroupPattern[] = [],
   ) {
-    this.compiled = patterns.map((policy) => ({ test: globToRegExp(policy.pattern), policy }));
+    this.compiled = patterns.map((policy) => ({ test: compileGlob(policy.pattern), policy }));
   }
 
   /**
