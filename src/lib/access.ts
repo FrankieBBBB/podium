@@ -182,13 +182,21 @@ export function isAllowedHost(host: string | null, allowed: string[] = []): bool
   return isPrivateIPv4(host) || isPrivateIPv6(host);
 }
 
-/** Split a comma or space separated env list into lowercase entries. */
+/**
+ * Split a comma or space separated env list into lowercase entries.
+ *
+ * `*.example.com` is read as `.example.com`. The leading dot is the rule
+ * `isAllowedHost` knows, but the star is how nginx, Caddy and every wildcard
+ * certificate spell it, and compared literally it matched no host at all -- the
+ * operator who typed it got the very 403 they were configuring away.
+ */
 export function parseHostList(raw: string | undefined): string[] {
   return (raw ?? '')
     .split(/[,\s]+/)
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean)
-    .map((entry) => hostOf(entry) ?? entry);
+    .map((entry) => hostOf(entry) ?? entry)
+    .map((entry) => (entry.startsWith('*.') ? entry.slice(1) : entry));
 }
 
 /**
