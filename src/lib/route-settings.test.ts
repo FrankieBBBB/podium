@@ -94,3 +94,34 @@ describe('GET /api/metrics', () => {
     expect(await scrape()).toContain('podium_freshness_target_seconds 14400');
   });
 });
+
+/**
+ * The assembly the rule check and the Teamarr push both score over.
+ *
+ * The rule-check route resolved stored settings for itself and then handed the
+ * store to `checkInputs`, which read the environment again for the bitrate
+ * floor -- so a floor raised in Settings changed what the ranking did and not
+ * what either rule set was scored against.
+ */
+describe('checkInputs', () => {
+  beforeEach(() => {
+    withSettings({ PODIUM_MIN_BITRATE_KBPS: null });
+  });
+
+  const floor = async () => {
+    const { checkInputs } = await import('./rule-check-inputs');
+    const store = new Store(join(dir, 'podium.db'));
+    try {
+      const empty = { channels: [], streams: [], providers: [], groups: [], fetchedAt: 0 };
+      return checkInputs(empty, store).strategy.weights.minBitrateKbps;
+    } finally {
+      store.close();
+    }
+  };
+
+  it('scores against the bitrate floor set in Settings', async () => {
+    expect(await floor()).toBe(500);
+    withSettings({ PODIUM_MIN_BITRATE_KBPS: '1500' });
+    expect(await floor()).toBe(1500);
+  });
+});

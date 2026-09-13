@@ -14,6 +14,7 @@ import { resolveOrdering } from './ordering';
 import { channelResolutionFloor } from './resolution';
 import type { RankStrategy } from './scoring';
 import { channelFloors, groupPatterns, ordering, policies, type Snapshot } from './server/state';
+import { resolveEnv } from './settings';
 import type { Store } from './store';
 import { type ChannelInput, factsFor, type StreamFacts } from './teamarr';
 import { type MatchIndex, matchKey } from './teamarr-match';
@@ -36,7 +37,11 @@ export interface CheckInputs {
  * which channels are worth paying for is what this function works out.
  */
 export function checkInputs(snap: Snapshot, store: Store): CheckInputs {
-  const config = loadConfig();
+  // Stored settings on top of the environment, as every other reader of a
+  // settable value does: the bitrate floor can be changed in Settings, and a
+  // floor read from the environment alone scored both rule sets against a
+  // number the ranking itself had stopped using.
+  const config = loadConfig(resolveEnv(process.env, store.settings()));
   const providerNames = new Map(snap.providers.map((p) => [p.id, p.name]));
   const groupNames = new Map(snap.groups.map((g) => [g.id, g.name]));
   const strategy = resolveOrdering(ordering(), providerNames, config.PODIUM_MIN_BITRATE_KBPS);
