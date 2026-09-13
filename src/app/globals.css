@@ -45,6 +45,15 @@ code {
   font-size: 0.9em;
 }
 
+/* A row that scrolls sideways on a phone, without a scrollbar eating its
+   height. The partly cut-off last item is the affordance. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }

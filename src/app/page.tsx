@@ -17,7 +17,8 @@ import { StreamSearch } from './stream-search';
 
 type Mode = 'always' | 'never' | 'after_epg_start' | 'assigned';
 type Tab = 'groups' | 'all' | 'dead' | 'rules' | 'progress' | 'quality' | 'settings';
-type ChanFilter = 'all' | 'regex' | 'noregex' | 'nomatch' | 'dead';
+type SettingsSection = 'general' | 'ordering' | 'stream-groups' | 'name-noise' | 'backup';
+type ChanFilter = 'all' | 'regex' | 'nomatch' | 'dead';
 
 interface ChannelRow {
   id: number;
@@ -187,6 +188,20 @@ const TAB_LABELS: Record<Tab, string> = {
   settings: 'Settings',
 };
 
+// Five views used to stack down one page, so Backup sat below 8,000 pixels of
+// probe timers -- and the settings form's pinned Save bar let go of the screen
+// halfway down, on a card it did not belong to.
+const SETTINGS_SECTIONS: Array<[SettingsSection, string]> = [
+  ['general', 'General'],
+  ['ordering', 'Ordering'],
+  ['stream-groups', 'Provider groups'],
+  ['name-noise', 'Name noise'],
+  ['backup', 'Backup'],
+];
+
+const isSettingsSection = (s: string | null): s is SettingsSection =>
+  SETTINGS_SECTIONS.some(([id]) => id === s);
+
 const lines = (text: string) =>
   text
     .split('\n')
@@ -210,6 +225,8 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
 
   const [tab, setTab] = useState<Tab>('groups');
+  const [section, setSection] = useState<SettingsSection>('general');
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
   const [groupId, setGroupId] = useState<number | null>(null);
   const [channelId, setChannelId] = useState<number | null>(null);
   const [filter, setFilter] = useState('');
@@ -300,6 +317,8 @@ export default function Page() {
         ? t
         : 'groups',
     );
+    const s = params.get('section');
+    setSection(isSettingsSection(s) ? s : 'general');
     const g = Number(params.get('group'));
     const c = Number(params.get('channel'));
     setGroupId(Number.isInteger(g) && g > 0 ? g : null);
@@ -314,10 +333,19 @@ export default function Page() {
   }, [applyUrl]);
 
   const navigate = useCallback(
-    (next: { tab?: Tab; group?: number | null; channel?: number | null }) => {
+    (next: {
+      tab?: Tab;
+      section?: SettingsSection;
+      group?: number | null;
+      channel?: number | null;
+    }) => {
       const params = new URLSearchParams();
       const t = next.tab ?? tab;
       if (t !== 'groups') params.set('tab', t);
+      // Another tab starts Settings back at the top rather than wherever it
+      // was left, which is what a link to ?tab=settings would do too.
+      const s = next.section ?? (next.tab === undefined ? section : 'general');
+      if (t === 'settings' && s !== 'general') params.set('section', s);
       const g = next.group === undefined ? groupId : next.group;
       const c = next.channel === undefined ? channelId : next.channel;
       if (g) params.set('group', String(g));
@@ -325,11 +353,18 @@ export default function Page() {
       const qs = params.toString();
       window.history.pushState(null, '', qs ? `?${qs}` : window.location.pathname);
       if (next.tab !== undefined) setTab(next.tab);
+      setSection(s);
       if (next.group !== undefined) setGroupId(next.group);
       if (next.channel !== undefined) setChannelId(next.channel);
     },
-    [tab, groupId, channelId],
+    [tab, section, groupId, channelId],
   );
+
+  // On a phone the tab row scrolls sideways, and a deep link to Settings would
+  // otherwise open with the selected tab out of sight.
+  useEffect(() => {
+    tabRefs.current[tab]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
 
   const group = useMemo(() => groups.find((g) => g.id === groupId) ?? null, [groups, groupId]);
   const channel = useMemo(
@@ -749,7 +784,6 @@ export default function Page() {
     return out
       .filter((c) => {
         if (chanFilter === 'regex') return c.regexCount > 0;
-        if (chanFilter === 'noregex') return c.regexCount === 0;
         if (chanFilter === 'nomatch')
           return c.groupMode !== 'never' && c.hasRule && c.matched === 0;
         if (chanFilter === 'dead') return deadFirstIds.has(c.id);
@@ -758,21 +792,6 @@ export default function Page() {
       .filter((c) => !filter || c.name.toLowerCase().includes(filter.toLowerCase()))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [groups, chanFilter, filter, showDisabled, deadFirstIds]);
-
-  // Built per render rather than inline in the JSX because the Dead entry is
-  // conditional on the summary having loaded, with a count that moves.
-  const chanChips = useMemo(() => {
-    const chips: Array<[ChanFilter, string]> = [
-      ['all', 'All'],
-      ['noregex', 'No regex'],
-      ['regex', 'On regex'],
-      ['nomatch', 'No match'],
-    ];
-    if (deadSummary) {
-      chips.push(['dead', deadFirstIds.size > 0 ? `Dead (${deadFirstIds.size})` : 'Dead']);
-    }
-    return chips;
-  }, [deadSummary, deadFirstIds]);
 
   const totals = useMemo(() => {
     const active = groups.filter((g) => g.mode !== 'never');
@@ -786,6 +805,28 @@ export default function Page() {
       regex: active.reduce((n, g) => n + g.rows.filter((c) => c.regexCount > 0).length, 0),
     };
   }, [groups]);
+
+  // Built per render rather than inline in the JSX because two entries are
+  // conditional. Legacy regex is a migration state, not a way to organise a
+  // lineup, so it only shows while something is still on it. "Dead first" is
+  // named for what it lists -- channels whose first stream is dead -- because
+  // a bare "Dead" sat one row under the Dead tab and read as the same thing.
+  const chanChips = useMemo(() => {
+    const chips: Array<[ChanFilter, string]> = [
+      ['all', 'All'],
+      ['nomatch', 'No match'],
+    ];
+    if (totals.regex > 0 || chanFilter === 'regex') {
+      chips.push(['regex', `Legacy regex (${totals.regex})`]);
+    }
+    if (deadSummary) {
+      chips.push([
+        'dead',
+        deadFirstIds.size > 0 ? `Dead first (${deadFirstIds.size})` : 'Dead first',
+      ]);
+    }
+    return chips;
+  }, [deadSummary, deadFirstIds, totals.regex, chanFilter]);
 
   const unifiedRows = useMemo(() => {
     if (!preview) return [];
@@ -865,14 +906,19 @@ export default function Page() {
             >
               Podium
             </button>
+            {/* With a channel open on a phone there is room for one name, not
+                two stumps of both; the back link under the header names the
+                group instead. */}
             {group && (
               <>
-                <span className="text-[var(--color-muted)]">/</span>
+                <span className={`text-[var(--color-muted)] ${channel ? 'hidden sm:inline' : ''}`}>
+                  /
+                </span>
                 <button
                   type="button"
                   onClick={() => navigate({ channel: null })}
                   className={`min-w-0 truncate ${
-                    channel ? 'text-[var(--color-accent)]' : 'font-semibold'
+                    channel ? 'hidden text-[var(--color-accent)] sm:block' : 'font-semibold'
                   }`}
                 >
                   {group.name}
@@ -886,20 +932,26 @@ export default function Page() {
               </>
             )}
           </nav>
+          {/* Not "Refresh": the Dead tab has its own, which re-reads the probe
+              cache, and two identically named buttons a card apart invited
+              the question of which did what. */}
           <button
             type="button"
-            className={`${btn} flex items-center gap-2`}
+            className={`${btn} flex flex-none items-center gap-2`}
             disabled={loading}
+            title="Fetch every channel and stream from Dispatcharr again"
             onClick={() => void load(true)}
           >
             {loading && <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {loading ? 'Refreshing' : 'Refresh'}
+            {loading ? 'Reloading' : 'Reload'}
+            <span className="hidden sm:inline">{loading ? '' : ' from Dispatcharr'}</span>
           </button>
         </div>
         {!group && (
           <p className="mt-1.5 text-sm tabular-nums text-[var(--color-muted)]">
             {totals.managed} managed · {totals.excluded} excluded · {totals.gaps} with no match ·{' '}
-            {totals.regex} on regex · {streamCount.toLocaleString()} streams
+            {totals.regex > 0 ? `${totals.regex} on legacy regex · ` : ''}
+            {streamCount.toLocaleString()} streams
           </p>
         )}
       </header>
@@ -907,32 +959,36 @@ export default function Page() {
       <main className="flex-1">
         {!group && (
           <>
-            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-line)] bg-[var(--color-panel)] px-5 py-3">
-              {(['groups', 'all', 'dead', 'rules', 'progress', 'quality', 'settings'] as const).map(
-                (t) => (
+            {/* One row that scrolls sideways on a phone. Wrapped, seven tabs
+                and the checkbox made a three-row staircase above the content. */}
+            <div className="flex items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-panel)] px-5 py-3">
+              <nav className="no-scrollbar -my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1">
+                {(
+                  ['groups', 'all', 'dead', 'rules', 'progress', 'quality', 'settings'] as const
+                ).map((t) => (
                   <button
                     type="button"
                     key={t}
+                    ref={(el) => {
+                      tabRefs.current[t] = el;
+                    }}
                     onClick={() => navigate({ tab: t })}
-                    className={chip(tab === t)}
+                    className={`${chip(tab === t)} flex-none whitespace-nowrap`}
                   >
                     {TAB_LABELS[t]}
                   </button>
-                ),
-              )}
+                ))}
+              </nav>
               {(tab === 'groups' || tab === 'all') && (
-                <>
-                  <span className="flex-1" />
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--color-muted)]">
-                    <input
-                      type="checkbox"
-                      checked={showDisabled}
-                      onChange={(e) => setShowDisabled(e.target.checked)}
-                      className="h-4 w-4 accent-[var(--color-accent)]"
-                    />
-                    Show disabled
-                  </label>
-                </>
+                <label className="flex flex-none cursor-pointer items-center gap-2 text-sm text-[var(--color-muted)]">
+                  <input
+                    type="checkbox"
+                    checked={showDisabled}
+                    onChange={(e) => setShowDisabled(e.target.checked)}
+                    className="h-4 w-4 accent-[var(--color-accent)]"
+                  />
+                  <span className="whitespace-nowrap">Show disabled</span>
+                </label>
               )}
             </div>
 
@@ -944,23 +1000,35 @@ export default function Page() {
 
             {tab === 'settings' && (
               <>
-                <SettingsView />
-                <div className="mt-4">
-                  <OrderingView />
-                </div>
-                {/* Which provider streams are candidates at all sits with the
-                    rest of the global config, not on any one channel. */}
-                <div className="mt-4">
-                  <StreamGroupsView />
-                </div>
-                {/* Same altitude: what every rule in the file reads, rather
-                    than what any one channel says. */}
-                <div className="mt-4">
-                  <NameNoiseView />
-                </div>
-                <div className="mt-4">
-                  <BackupView />
-                </div>
+                <nav className="no-scrollbar flex gap-4 overflow-x-auto border-b border-[var(--color-line)] px-5">
+                  {SETTINGS_SECTIONS.map(([id, label]) => (
+                    <button
+                      type="button"
+                      key={id}
+                      onClick={() => navigate({ section: id })}
+                      className={`-mb-px flex-none whitespace-nowrap border-b-2 py-2.5 text-sm ${
+                        section === id
+                          ? 'border-[var(--color-accent)] font-semibold text-[var(--color-ink)]'
+                          : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+                {section === 'general' && <SettingsView />}
+                {section !== 'general' && (
+                  <div className="p-5">
+                    {section === 'ordering' && <OrderingView />}
+                    {/* Which provider streams are candidates at all sits with
+                        the rest of the global config, not on any one channel. */}
+                    {section === 'stream-groups' && <StreamGroupsView />}
+                    {/* Same altitude: what every rule in the file reads, rather
+                        than what any one channel says. */}
+                    {section === 'name-noise' && <NameNoiseView />}
+                    {section === 'backup' && <BackupView />}
+                  </div>
+                )}
               </>
             )}
 
@@ -1206,19 +1274,22 @@ export default function Page() {
               </p>
             </div>
             <div className="border-b border-[var(--color-line)] bg-[var(--color-panel)] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
-                  {MODES.map((m) => (
-                    <button
-                      type="button"
-                      key={m.value}
-                      onClick={() => void setMode(group.id, m.value)}
-                      className={chip(group.mode === m.value)}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
+              {/* Two rows on purpose: the mode is one choice, the flags and the
+                  floor are another. Sharing a wrapping row, they broke into
+                  four ragged lines on a phone with no telling which was which. */}
+              <div className="flex flex-wrap gap-2">
+                {MODES.map((m) => (
+                  <button
+                    type="button"
+                    key={m.value}
+                    onClick={() => void setMode(group.id, m.value)}
+                    className={chip(group.mode === m.value)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
@@ -1406,6 +1477,15 @@ export default function Page() {
 
         {channel && (
           <div className="p-5">
+            {group && (
+              <button
+                type="button"
+                onClick={() => navigate({ channel: null })}
+                className="mb-1 max-w-full truncate text-sm text-[var(--color-accent)]"
+              >
+                ‹ {group.name}
+              </button>
+            )}
             <p className="mb-4 text-sm text-[var(--color-muted)]">
               channel {channel.id}
               {channel.tvgId ? ` · ${channel.tvgId}` : ''} · {channel.assigned} assigned in
