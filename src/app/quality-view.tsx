@@ -1227,11 +1227,11 @@ function pct(value: number): string {
 
 /** What each guard means, in the terms the operator can act on. */
 const GUARD_LABEL: Record<MinerGuard, string> = {
-  samples: 'too few samples either side of the split',
-  effect: 'difference too small to survive points rounding',
-  cells: 'seen in only one bucket, so it is a channel, not a pattern',
-  duration: 'not predicting the same thing for long enough yet',
-  stability: 'flips sign across the window, so it is fitting a schedule',
+  samples: 'too few streams with and without it to compare',
+  effect: 'difference too small to change a score',
+  cells: 'seen in one provider group only — a channel, not a naming pattern',
+  duration: 'not seen for long enough yet',
+  stability: 'goes up and down over time — likely a schedule, not the name',
 };
 
 /**
@@ -1248,25 +1248,28 @@ function MinerPanel({ report }: { report: MinerReport | undefined }) {
   const short = report.durationShortfallDays > 0;
   return (
     <div className="mt-4 space-y-5">
+      {/* Plain names, with the precise meaning on hover. A "cell" is a
+          (provider, group, tier, audio-only) combination -- see docs/miner.md --
+          and nobody reading this panel should need to know that to use it. */}
       <div className="flex flex-wrap items-center gap-4 text-sm tabular-nums">
-        <span>
-          <span className={muted}>Window </span>
+        <span title="Days between the oldest and newest sample the miner read">
+          <span className={muted}>History </span>
           {report.windowDays} d
         </span>
-        <span>
-          <span className={muted}>Buckets </span>
+        <span title="Provider, group, resolution and audio-only combinations the samples fall into">
+          <span className={muted}>Stream groups </span>
           {report.cells}
         </span>
-        <span>
-          <span className={muted}>Splittable </span>
+        <span title="Groups with enough samples to compare streams with a word against streams without it">
+          <span className={muted}>Comparable </span>
           {report.cellsWithBothSides}
         </span>
-        <span>
-          <span className={muted}>Candidates </span>
+        <span title="Words in stream names the miner tested">
+          <span className={muted}>Words tested </span>
           {report.passA.candidates.length}
         </span>
-        <span>
-          <span className={muted}>Clearing </span>
+        <span title="Words that passed every check below">
+          <span className={muted}>Ready </span>
           {report.passA.clearing}
         </span>
       </div>
@@ -1336,7 +1339,7 @@ function MinerPanel({ report }: { report: MinerReport | undefined }) {
               <tr>
                 <th className="py-1 font-normal">Token</th>
                 <th className="py-1 text-right font-normal">Effect</th>
-                <th className="py-1 text-right font-normal">Buckets</th>
+                <th className="py-1 text-right font-normal">Groups</th>
                 <th className="py-1 text-right font-normal">Span</th>
                 <th className="py-1 font-normal"> Blocked by</th>
               </tr>

@@ -7,6 +7,7 @@ interface Field {
   kind: 'string' | 'secret' | 'boolean' | 'number';
   label: string;
   help: string;
+  more?: string;
   section: 'dispatcharr' | 'behaviour' | 'probing' | 'quality' | 'teamarr';
   value: string;
   isSet: boolean;
@@ -32,13 +33,13 @@ const SECTIONS: Array<{ id: Field['section']; title: string; blurb: string }> = 
     id: 'teamarr',
     title: 'Teamarr',
     blurb:
-      'Pushing the fitted rules to Teamarr, instead of downloading a file and importing it by hand. Every push is refused unless it can be shown not to make the ordering worse.',
+      'Push the fitted rules to Teamarr directly. A push is refused unless it can be shown not to make the ordering worse.',
   },
   {
     id: 'quality',
     title: 'Quality priors',
     blurb:
-      'Which probes the learned priors — and the rules exported from them — are allowed to measure. Nothing here deletes a sample; it only decides what the fit reads.',
+      'Which probes the learned priors, and the rules exported from them, are fitted on. Nothing here deletes a sample.',
   },
 ];
 
@@ -254,66 +255,79 @@ export function SettingsView() {
 
             <div className="mt-4 grid gap-4">
               {rows.map((f) => (
-                <label key={f.key} className="block">
-                  <span className="flex flex-wrap items-baseline gap-2">
-                    <span className="font-medium">{f.label}</span>
-                    {f.source === 'environment' && (
-                      <span className={`${pill} bg-[var(--color-line)] text-[var(--color-muted)]`}>
-                        from environment
-                      </span>
-                    )}
-                    {f.kind === 'secret' && f.isSet && (
-                      <span
-                        className={`${pill} bg-[var(--color-accent-soft)] text-[var(--color-accent)]`}
-                      >
-                        set
-                      </span>
-                    )}
-                  </span>
-
-                  {f.kind === 'boolean' ? (
-                    <span className="mt-2 flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-[var(--color-accent)]"
-                        checked={checkedValue(f)}
-                        onChange={(e) =>
-                          setEdits({ ...edits, [f.key]: e.target.checked ? 'true' : 'false' })
-                        }
-                      />
-                      <span className="text-sm text-[var(--color-muted)]">{f.help}</span>
+                <div key={f.key}>
+                  <label className="block">
+                    <span className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-medium">{f.label}</span>
+                      {f.source === 'environment' && (
+                        <span
+                          className={`${pill} bg-[var(--color-line)] text-[var(--color-muted)]`}
+                        >
+                          from environment
+                        </span>
+                      )}
+                      {f.kind === 'secret' && f.isSet && (
+                        <span
+                          className={`${pill} bg-[var(--color-accent-soft)] text-[var(--color-accent)]`}
+                        >
+                          set
+                        </span>
+                      )}
                     </span>
-                  ) : (
-                    <>
-                      <input
-                        className={`${input} mt-2`}
-                        type={f.kind === 'secret' ? 'password' : 'text'}
-                        inputMode={f.kind === 'number' ? 'numeric' : undefined}
-                        value={currentValue(f)}
-                        // A blank box with no hint of what it falls back to is
-                        // why "what is this actually set to?" was unanswerable.
-                        placeholder={
-                          f.kind === 'secret' && f.isSet
-                            ? 'unchanged — type to replace'
-                            : f.defaultValue
-                              ? `${f.defaultValue} (default)`
-                              : ''
-                        }
-                        autoComplete={f.kind === 'secret' ? 'new-password' : 'off'}
-                        onChange={(e) => setEdits({ ...edits, [f.key]: e.target.value })}
-                      />
-                      <span className="mt-1 block text-sm text-[var(--color-muted)]">
-                        {f.help}
-                        {f.kind === 'number' && f.min !== undefined && f.max !== undefined && (
-                          <>
-                            {' '}
-                            Between {f.min} and {f.max.toLocaleString()}.
-                          </>
-                        )}
+
+                    {f.kind === 'boolean' ? (
+                      <span className="mt-2 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-[var(--color-accent)]"
+                          checked={checkedValue(f)}
+                          onChange={(e) =>
+                            setEdits({ ...edits, [f.key]: e.target.checked ? 'true' : 'false' })
+                          }
+                        />
+                        <span className="text-sm text-[var(--color-muted)]">{f.help}</span>
                       </span>
-                    </>
+                    ) : (
+                      <>
+                        <input
+                          className={`${input} mt-2`}
+                          type={f.kind === 'secret' ? 'password' : 'text'}
+                          inputMode={f.kind === 'number' ? 'numeric' : undefined}
+                          value={currentValue(f)}
+                          // A blank box with no hint of what it falls back to is
+                          // why "what is this actually set to?" was unanswerable.
+                          placeholder={
+                            f.kind === 'secret' && f.isSet
+                              ? 'unchanged — type to replace'
+                              : f.defaultValue
+                                ? `${f.defaultValue} (default)`
+                                : ''
+                          }
+                          autoComplete={f.kind === 'secret' ? 'new-password' : 'off'}
+                          onChange={(e) => setEdits({ ...edits, [f.key]: e.target.value })}
+                        />
+                        <span className="mt-1 block text-sm text-[var(--color-muted)]">
+                          {f.help}
+                          {f.kind === 'number' && f.min !== undefined && f.max !== undefined && (
+                            <>
+                              {' '}
+                              Between {f.min} and {f.max.toLocaleString()}.
+                            </>
+                          )}
+                        </span>
+                      </>
+                    )}
+                  </label>
+                  {/* Outside the label: inside it, opening this ticked the box. */}
+                  {f.more && (
+                    <details className="mt-1 text-sm text-[var(--color-muted)]">
+                      <summary className="cursor-pointer select-none hover:text-[var(--color-accent)]">
+                        More
+                      </summary>
+                      <p className="mt-1 max-w-[75ch]">{f.more}</p>
+                    </details>
                   )}
-                </label>
+                </div>
               ))}
             </div>
 

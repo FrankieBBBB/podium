@@ -22,7 +22,15 @@ export interface FieldSpec {
   key: string;
   kind: FieldKind;
   label: string;
+  /** One sentence: what the setting does. Always shown. */
   help: string;
+  /**
+   * The why and the edge cases, behind a "More" disclosure. Kept rather than
+   * cut: most of it records a failure somebody hit, and it is what stops the
+   * next person hitting it -- but a 70-word paragraph under every checkbox made
+   * the page unreadable for the question it is usually opened for.
+   */
+  more?: string;
   /** Grouping for the settings page. */
   section: 'dispatcharr' | 'behaviour' | 'probing' | 'quality' | 'teamarr';
   /**
@@ -110,21 +118,24 @@ export const FIELDS: FieldSpec[] = [
     key: 'PODIUM_PROBE_IDLE_PROVIDERS',
     kind: 'boolean',
     label: 'Keep probing providers nobody is watching',
-    help: 'Narrows the pause above to just the account being streamed from, so the other providers carry on. Podium yields the watched provider entirely, and still pauses everything if it cannot tell which provider a viewer is on. Costs a full catalogue fetch on each pass someone is watching. Does nothing unless the pause above is on.',
+    help: 'Pause only the provider being watched, and keep probing the others.',
+    more: 'If Podium cannot tell which provider a viewer is on, it still pauses everything. Costs a full catalogue fetch on each pass while someone is watching. Does nothing unless the pause above is on.',
     section: 'behaviour',
   },
   {
     key: 'PODIUM_PROBE_WATCHED_PROVIDER',
     kind: 'boolean',
     label: 'Also probe the provider being watched',
-    help: 'Instead of leaving the watched account alone entirely, use the connections it has spare beyond the reserve below. Meant for a provider with several connections — the one sorted top is usually both the best and the one being watched, so yielding it whole costs ranking exactly where it matters. An account with nothing spare, a single-connection one above all, still yields. Does nothing unless the setting above is on.',
+    help: 'Keep probing the watched provider on any connections it has spare beyond the reserve below.',
+    more: 'Meant for a provider with several connections — the one sorted top is usually both the best and the one being watched, so yielding it whole costs ranking exactly where it matters. An account with nothing spare, a single-connection one above all, still yields. Does nothing unless the setting above is on.',
     section: 'behaviour',
   },
   {
     key: 'PODIUM_WATCHED_FREE_SLOTS',
     kind: 'number',
     label: 'Connections to keep free on the watched provider',
-    help: 'Held back on that account over and above the viewers already on it. Two, not one: changing channel needs a slot for the new stream before the provider releases the old one, and a provider may hold a dead connection open for another half minute. Podium only knows the cap Dispatcharr was told about — another app on the same credentials is invisible to it, so raise this if anything else uses the account.',
+    help: 'Held back on that account on top of the viewers already on it.',
+    more: 'Two, not one: changing channel needs a slot for the new stream before the provider releases the old one, and a provider may hold a dead connection open for another half minute. Podium only knows the cap Dispatcharr was told about — another app on the same credentials is invisible to it, so raise this if anything else uses the account.',
     section: 'behaviour',
     min: 0,
     max: 20,
@@ -133,14 +144,16 @@ export const FIELDS: FieldSpec[] = [
     key: 'PODIUM_REMOVE_UNMATCHED',
     kind: 'boolean',
     label: 'Remove unmatched streams',
-    help: 'Off keeps streams no rule claims, ranked below the ones it does. On unassigns them, which is destructive. A stream Dispatcharr has marked stale is never removed however long it stays that way — during a provider outage its whole catalogue goes stale, and unassigning it would survive the outage even though the streams come back.',
+    help: 'On, streams no rule claims are unassigned; off, they stay, ranked below the ones it does. Removal has no undo.',
+    more: 'A stream Dispatcharr has marked stale is never removed however long it stays that way — during a provider outage its whole catalogue goes stale, and unassigning it would survive the outage even though the streams come back.',
     section: 'behaviour',
   },
   {
     key: 'PODIUM_REMOVE_UNMATCHED_AFTER_MS',
     kind: 'number',
     label: 'Wait before removing an unmatched stream (hours)',
-    help: 'How long a stream must go unclaimed, without interruption, before the setting above may unassign it. The clock restarts the moment a rule claims it again, so a stream that looks unclaimed for one pass — a rule saved mid-edit, a provider group renamed upstream, a catalogue fetch that came back short — is never removed on the strength of it. 0 removes immediately, which is how earlier versions behaved. Checking a channel by hand and ticking the drop box ignores this.',
+    help: 'How long a stream must stay unclaimed, without a break, before the setting above may unassign it. 0 removes immediately.',
+    more: 'The clock restarts the moment a rule claims it again, so a stream that looks unclaimed for one pass — a rule saved mid-edit, a provider group renamed upstream, a catalogue fetch that came back short — is never removed on the strength of it. 0 is how earlier versions behaved. Checking a channel by hand and ticking the drop box ignores this.',
     section: 'behaviour',
     scale: 3_600_000,
     min: 0,
@@ -150,7 +163,8 @@ export const FIELDS: FieldSpec[] = [
     key: 'PODIUM_REMOVE_DEAD_AFTER_CHECKS',
     kind: 'number',
     label: 'Remove a dead stream after this many checks',
-    help: 'Unassigns a stream that came back dead this many consecutive times. Checks, not hours: a dead stream is re-probed after 3h, then 6, 12 and 24, so 5 checks is about two days. Any live verdict resets the count, and a stream that is merely black-screened or under the bitrate floor is alive — it sinks, but is never removed. A provider whose catalogue has mostly gone dead is left alone entirely, so an outage cannot strip its streams off every channel. 0 is off, and removal has no undo.',
+    help: 'Unassigns a stream that came back dead this many checks in a row. 0 is off; removal has no undo.',
+    more: 'Checks, not hours: a dead stream is re-probed after 3h, then 6, 12 and 24, so 5 checks is about two days. Any live verdict resets the count, and a stream that is merely black-screened or under the bitrate floor is alive — it sinks, but is never removed. A provider whose catalogue has mostly gone dead is left alone entirely, so an outage cannot strip its streams off every channel.',
     section: 'behaviour',
     min: 0,
     max: 100,
@@ -160,7 +174,8 @@ export const FIELDS: FieldSpec[] = [
     key: 'PODIUM_AUTO_ASSIGN',
     kind: 'boolean',
     label: 'Assign matched streams',
-    help: 'On, a pass can add a matched stream to a channel, so a new provider’s streams join by themselves. Off, it only reorders what a channel already carries. Only healthy streams are added, never more than the cap, and nothing is ever removed. A loose alias will write, so check a channel first — with dry run on, the log names what it would assign.',
+    help: 'On, a pass can add healthy matched streams to a channel; off, it only reorders what the channel already carries.',
+    more: 'A new provider’s streams then join by themselves. Never more than the cap below, and nothing is ever removed. A loose alias will write, so check a channel first — with dry run on, the log names what it would assign.',
     section: 'behaviour',
   },
   {
@@ -253,7 +268,8 @@ export const FIELDS: FieldSpec[] = [
     key: 'PODIUM_UNKNOWN_BITRATE_TTL_MS',
     kind: 'number',
     label: 'Unmeasured verdict lifetime (minutes)',
-    help: 'How soon a stream that came back alive but with no bitrate reading is measured again. Ranking puts these behind every stream it has real data for, so a short lifetime stops a possibly-good stream sitting at the bottom of its channel all day. Never longer than the live lifetime. 0 lets them expire with everything else.',
+    help: 'How soon a live stream with no bitrate reading is measured again. 0 lets them expire with everything else.',
+    more: 'Ranking puts these behind every stream it has real data for, so a short lifetime stops a possibly-good stream sitting at the bottom of its channel all day. Never longer than the live lifetime.',
     section: 'behaviour',
     scale: 60_000,
     min: 0,
@@ -272,7 +288,8 @@ export const FIELDS: FieldSpec[] = [
     key: 'PODIUM_TEAMARR_URL',
     kind: 'string',
     label: 'Teamarr URL',
-    help: 'Where Teamarr answers, e.g. http://teamarr:9195 — a plain http(s) base, with no path fragment, query or credentials in it. Leave empty and nothing is pushed; the export stays a file you download. Use in-cluster service DNS where possible.',
+    help: 'Where Teamarr answers, e.g. http://teamarr:9195. Leave empty and the export stays a file you download.',
+    more: 'A plain http(s) base, with no path fragment, query or credentials in it. Use in-cluster service DNS where possible.',
     section: 'teamarr',
   },
   {
@@ -305,7 +322,8 @@ export const FIELDS: FieldSpec[] = [
     key: 'PODIUM_TEAMARR_MIN_CHANNELS',
     kind: 'number',
     label: 'Fewest channels to check against',
-    help: 'A scheduled push waits, and retries within the hour, until it can compare the old and new rules on at least this many channels. Only event channels currently carrying two probed streams can be compared, so the number collapses overnight and a push landing then is effectively unchecked. Installs that never reach this many are not held back.',
+    help: 'A scheduled push waits until it can compare the old and new rules on at least this many channels.',
+    more: 'It retries within the hour. Only event channels currently carrying two probed streams can be compared, so the number collapses overnight and a push landing then is effectively unchecked. Installs that never reach this many are not held back.',
     section: 'teamarr',
     min: 0,
     max: 10_000,
@@ -314,14 +332,16 @@ export const FIELDS: FieldSpec[] = [
     key: 'PODIUM_QUALITY_EVENT_ONLY',
     kind: 'boolean',
     label: 'Learn only from event channels',
-    help: 'Count a probe towards the priors only when its channel sits in a group set to “after EPG start” or “assigned”. On by default, because the exported rules are evaluated at kickoff and a catalogue is mostly VOD and filler. Samples taken before this setting existed carry no policy and show as unrecorded until the patterns below claim them.',
+    help: 'Learn only from channels in groups set to After kickoff or Assigned.',
+    more: 'On by default, because the exported rules are evaluated at kickoff and a catalogue is mostly VOD and filler. Samples taken before this setting existed carry no policy and show as unrecorded until the patterns below claim them.',
     section: 'quality',
   },
   {
     key: 'PODIUM_QUALITY_INCLUDE_GROUPS',
     kind: 'string',
     label: 'Always learn from groups matching',
-    help: 'Globs, comma-separated — e.g. “* SPORT*, *PPV*”. Matched against both the provider group and the channel group. Admits a group whatever its policy says, and it is the only setting that reaches backwards: naming the groups your existing history came from puts those samples in scope immediately.',
+    help: 'Globs, comma-separated — e.g. “* SPORT*, *PPV*” — matched against both the provider group and the channel group.',
+    more: 'Admits a group whatever its policy says, and it is the only setting that reaches backwards: naming the groups your existing history came from puts those samples in scope immediately.',
     section: 'quality',
   },
   {

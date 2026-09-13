@@ -1398,8 +1398,7 @@ export default function Page() {
                           Probe all
                         </button>
                         <span className="text-sm text-[var(--color-muted)]">
-                          Probes every channel in this group immediately and updates cached stream
-                          stats.
+                          Probes every channel here now, from this page.
                         </span>
                       </>
                     )}
@@ -1445,8 +1444,7 @@ export default function Page() {
                         Re-check this group
                       </button>
                       <span className="text-sm text-[var(--color-muted)]">
-                        Measures every stream here again, however fresh it is — for the hours before
-                        something you care about is on.
+                        Queues every stream here for the worker, however recently it was checked.
                       </span>
                     </div>
                   )}
