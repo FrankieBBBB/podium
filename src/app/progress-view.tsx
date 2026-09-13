@@ -486,8 +486,7 @@ export function ProgressView() {
           ) : (
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm text-[var(--color-muted)]">
-                Something on tonight? Re-check the library now rather than waiting for the freshness
-                target to expire it.
+                Re-check every stream now instead of waiting for the freshness target.
                 {refresh.groups > 0 && (
                   <>
                     {' '}

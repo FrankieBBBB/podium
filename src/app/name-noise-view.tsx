@@ -157,12 +157,9 @@ export function NameNoiseView() {
         Name noise
       </h3>
       <p className="mt-1.5 text-sm text-[var(--color-muted)]">
-        Words to delete from every provider stream name before matching reads it, so a badge the
-        provider stamps on a name never has to be written into an alias. Badge symbols —{' '}
-        <span className="mono">◉ ▶ ⏺ ★</span> — are already stripped and need nothing here; this is
-        for the ones spelled as words, like <span className="mono">CATCHUP</span> or{' '}
-        <span className="mono">24/7</span>. Whole words only, so <span className="mono">HD</span>{' '}
-        will not eat the end of <span className="mono">GOLD</span>.
+        Words removed from every stream name before matching, like{' '}
+        <span className="mono">CATCHUP</span> or <span className="mono">24/7</span>. Whole words
+        only. Badge symbols (<span className="mono">◉ ▶ ⏺ ★</span>) are already removed.
       </p>
 
       {error && (
