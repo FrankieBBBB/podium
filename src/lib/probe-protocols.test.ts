@@ -13,9 +13,9 @@
  *     from the outside like a dead stream.
  *
  * Naming the transports Podium supports fixes both: a scheme in the table is
- * probed with exactly what its own protocol needs, a scheme outside it is
- * refused before anything is spawned, and a bare path still gets the local
- * whitelist, which is how the probe is exercised against a sample on disk.
+ * probed with exactly what its own protocol needs, and anything else -- a
+ * scheme outside it, or no scheme at all, which ffmpeg opens as a local file --
+ * is refused before anything is spawned.
  */
 
 import { readdirSync } from 'fs';
@@ -59,9 +59,20 @@ describe('rejectUrl', () => {
     expect(rejectUrl('subfile:/app/data/podium.db')).toContain('network streams only');
   });
 
-  it('still accepts a bare path, which is how a sample on disk is probed', () => {
-    expect(rejectUrl('/app/data/sample.ts')).toBe('');
-    expect(rejectUrl('./sample.ts')).toBe('');
+  it('refuses a bare path, which ffmpeg would open as a local file', () => {
+    // An M3U line is any string; with no scheme it is `file://` by another name.
+    expect(rejectUrl('/app/data/podium.db')).toContain('no scheme');
+    expect(rejectUrl('./sample.ts')).toContain('network streams only');
+    expect(rejectUrl('/tmp/odd:name.ts')).toContain('no scheme');
+    expect(deadReason(rejectUrl('/etc/hosts'))).toBe('rejected');
+  });
+
+  it('refuses a scheme that only exists on the object prototype', () => {
+    // `constructor` is the one prototype key the lowercasing scheme regex can
+    // produce; it used to find `Object` in the table and pass.
+    for (const url of ['constructor://x', 'CONSTRUCTOR:x']) {
+      expect(rejectUrl(url), url).toContain('"constructor:" scheme');
+    }
   });
 
   it('classifies a refused scheme the way every other refusal is classified', () => {

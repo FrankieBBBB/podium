@@ -1,7 +1,16 @@
 import { execFileSync } from 'child_process';
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import {
+  createReadStream,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'fs';
+import { createServer, type Server } from 'http';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   DEAD_REASONS,
@@ -67,10 +76,10 @@ describe('rejectUrl', () => {
     expect(rejectUrl('')).toBe('empty url');
   });
 
-  it('passes anything that is actually a url or a path', () => {
+  it('passes a network stream url, and not a path', () => {
     expect(rejectUrl('http://provider.example/live/1.ts')).toBe('');
-    expect(rejectUrl('/app/data/sample.ts')).toBe('');
-    expect(rejectUrl('./sample.ts')).toBe('');
+    // A path has no transport to whitelist; see probe-protocols.test.ts.
+    expect(rejectUrl('/app/data/sample.ts')).not.toBe('');
   });
 });
 
@@ -89,13 +98,21 @@ describe('probe refuses a hostile url before spawning', () => {
   });
 });
 
+/**
+ * Served over HTTP rather than probed as paths. A stream URL with no scheme is
+ * refused -- ffmpeg would open it as a local file -- so the fixtures reach the
+ * probe the same way a provider's stream does.
+ */
 describe('probe against generated video', () => {
   const available = hasFfmpeg();
   let dir: string;
+  let server: Server | undefined;
+  let base = '';
   let blackFile: string;
   let colourFile: string;
+  const url = (name: string) => `${base}/${name}`;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     if (!available) return;
     dir = mkdtempSync(join(tmpdir(), 'podium-probe-'));
     blackFile = join(dir, 'black.ts');
@@ -133,16 +150,39 @@ describe('probe against generated video', () => {
       'yuv420p',
       colourFile,
     ]);
+
+    const listening = createServer((request, response) => {
+      const file = join(dir, basename(request.url ?? ''));
+      if (!existsSync(file)) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, {
+        'Content-Type': 'video/mp2t',
+        'Content-Length': statSync(file).size,
+      });
+      createReadStream(file).pipe(response);
+    });
+    server = listening;
+    await new Promise<void>((resolve) => listening.listen(0, '127.0.0.1', resolve));
+    const address = listening.address();
+    base = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
   }, 120_000);
 
-  afterAll(() => {
+  afterAll(async () => {
+    const open = server;
+    if (open) {
+      // A probe killed mid-read can leave its socket open; close() alone waits on it.
+      open.closeAllConnections();
+      await new Promise((resolve) => open.close(resolve));
+    }
     if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
   it.runIf(available)(
     'reads resolution, fps and codec off a real file',
     async () => {
-      const result = await probe(colourFile, { detectBlack: false, measureBitrate: false });
+      const result = await probe(url('colour.ts'), { detectBlack: false, measureBitrate: false });
       expect(result.alive).toBe(true);
       expect(result.width).toBe(640);
       expect(result.height).toBe(360);
@@ -161,8 +201,8 @@ describe('probe against generated video', () => {
     async () => {
       // The failure every quality metric misses: alive, right size, healthy
       // bitrate, showing nothing.
-      const black = await probe(blackFile, { measureSeconds: 3, blackRatio: 0.5 });
-      const colour = await probe(colourFile, { measureSeconds: 3, blackRatio: 0.5 });
+      const black = await probe(url('black.ts'), { measureSeconds: 3, blackRatio: 0.5 });
+      const colour = await probe(url('colour.ts'), { measureSeconds: 3, blackRatio: 0.5 });
       expect(black.black).toBe(true);
       expect(colour.black).toBe(false);
     },
@@ -172,16 +212,16 @@ describe('probe against generated video', () => {
   it.runIf(available)(
     'measures a bitrate the container does not declare',
     async () => {
-      const sample = await sampleStream(colourFile, { seconds: 3 });
+      const sample = await sampleStream(url('colour.ts'), { seconds: 3 });
       expect(sample.bitrateKbps).toBeGreaterThan(0);
     },
     120_000,
   );
 
   it.runIf(available)(
-    'treats a file that is not media as dead, without throwing',
+    'treats a stream that is not there as dead, without throwing',
     async () => {
-      const result = await probe(join(dir, 'does-not-exist.ts'), {
+      const result = await probe(url('does-not-exist.ts'), {
         detectBlack: false,
         measureBitrate: false,
       });
@@ -262,7 +302,8 @@ describe('a sample cut short keeps what it read', () => {
   });
 
   it.runIf(usable)('reports the bitrate measured before the kill', async () => {
-    const sample = await sampleStream(join(dir, 'stream.ts'), {
+    // The stub never opens its input; the URL only has to get past `rejectUrl`.
+    const sample = await sampleStream('http://provider.example/live/stream.ts', {
       timeoutMs: 750,
       ffmpegPath: fakeFfmpeg,
     });
@@ -272,7 +313,7 @@ describe('a sample cut short keeps what it read', () => {
   });
 
   it.runIf(usable)('carries that bitrate through as a measured one', async () => {
-    const result = await probe(join(dir, 'stream.ts'), {
+    const result = await probe('http://provider.example/live/stream.ts', {
       timeoutMs: 750,
       ffprobePath: fakeFfprobe,
       ffmpegPath: fakeFfmpeg,

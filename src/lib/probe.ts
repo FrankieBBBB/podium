@@ -209,24 +209,29 @@ const PROTOCOL_WHITELISTS: Record<string, string> = {
   rtp: 'rtp,udp,crypto,data',
 };
 
-/**
- * A local input -- which exists only so this can be exercised against a sample
- * on disk -- gets no network, the mirror of the rule above.
- */
-const LOCAL_WHITELIST = 'file,crypto,data';
-
 /** The scheme a URL names, lowercased, or empty for a bare path. */
 export function schemeOf(url: string): string {
   return /^([a-z][a-z0-9+.-]*):/i.exec(url.trim())?.[1]?.toLowerCase() ?? '';
 }
 
+/**
+ * The table's entry for a scheme, if it has one of its own.
+ *
+ * Not a bare index: `constructor:` is a scheme by the regex above, and indexing
+ * a plain object with it finds `Object` on the prototype -- truthy, so a check
+ * on the result let it through, and `spawn` stringified the function into
+ * ffmpeg's whitelist argument.
+ */
+function whitelistFor(scheme: string): string | undefined {
+  return Object.hasOwn(PROTOCOL_WHITELISTS, scheme) ? PROTOCOL_WHITELISTS[scheme] : undefined;
+}
+
 function protocolArgs(url: string): string[] {
-  const scheme = schemeOf(url);
-  const allowed = scheme ? PROTOCOL_WHITELISTS[scheme] : LOCAL_WHITELIST;
   // `rejectUrl` has already refused anything not in the table, so the fallback
   // is unreachable rather than a policy -- and if it ever becomes reachable, it
-  // should be the strictest thing here rather than the loosest.
-  return ['-protocol_whitelist', allowed ?? LOCAL_WHITELIST];
+  // should be the strictest thing here rather than the loosest: no files, and
+  // no network.
+  return ['-protocol_whitelist', whitelistFor(schemeOf(url)) ?? 'crypto,data'];
 }
 
 /**
@@ -249,15 +254,20 @@ function protocolArgs(url: string): string[] {
  * disclosure and the other is a whole class of stream Podium could not measure;
  * naming the transports it does support fixes both at once.
  *
- * A bare path with no scheme keeps working: it is how the probe is exercised
- * against a sample on disk, and it is not something a URL from an M3U reaches
- * -- ffmpeg resolves it as a path, not as a protocol.
+ * A bare path is refused with the rest. It used to be let through, with a
+ * `file` whitelist, so the probe could be pointed at a sample on disk -- but an
+ * M3U line is any string, Dispatcharr stores it as the stream's URL, and ffmpeg
+ * opens a string with no scheme as a local file. That was `file://` by another
+ * spelling, and nothing in Podium ever probed a sample that way.
  */
 export function rejectUrl(url: string): string {
   if (url.trim() === '') return 'empty url';
   if (url.startsWith('-')) return 'refusing a url that begins with "-"';
   const scheme = schemeOf(url);
-  if (scheme && !PROTOCOL_WHITELISTS[scheme]) {
+  if (!scheme) {
+    return 'refusing a url with no scheme -- Podium probes network streams only';
+  }
+  if (!whitelistFor(scheme)) {
     // Worded to start the way the refusal above does: `deadReason` classifies
     // "refusing a url..." as `rejected`, and a message that reads the same to a
     // person but not to that test would land in the `other` bucket.
