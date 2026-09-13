@@ -114,6 +114,15 @@ describe('isAllowedHost', () => {
     expect(isAllowedHost('other.example.com', allowed)).toBe(false);
   });
 
+  it('reads a *. wildcard as the same suffix rule', () => {
+    const allowed = parseHostList('*.apps.example.org:443');
+    expect(allowed).toEqual(['.apps.example.org']);
+    expect(isAllowedHost('podium.apps.example.org', allowed)).toBe(true);
+    // Still subdomains only, exactly as the leading-dot form.
+    expect(isAllowedHost('apps.example.org', allowed)).toBe(false);
+    expect(isAllowedHost('other.example.com', allowed)).toBe(false);
+  });
+
   it('has an explicit escape hatch', () => {
     expect(isAllowedHost('anything.example.com', ['*'])).toBe(true);
   });

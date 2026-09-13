@@ -79,7 +79,9 @@ PODIUM_ALLOWED_HOSTS="podium.example.com"
 ```
 
 Several are comma-separated, a leading dot is a subdomain wildcard
-(`.example.com`), and `*` disables the check entirely.
+(`.example.com`, or `*.example.com` — the same rule), and `*` disables the
+check entirely. A wildcard covers subdomains only; list `example.com` itself if
+you want it too.
 
 What that check does *not* cover, stated plainly, because both are deliberate:
 
