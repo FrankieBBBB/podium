@@ -164,7 +164,7 @@ export function StreamGroupsView() {
       )}
 
       {visible.length > 0 && (
-        <ul className="mt-3 max-h-[420px] overflow-y-auto">
+        <ul className="scroll-shadow mt-3 max-h-[420px] overflow-y-auto">
           {visible.map((g) => (
             <li
               key={g.id}
