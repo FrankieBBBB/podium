@@ -19,7 +19,7 @@ export async function PUT(request: Request, context: { params: Promise<{ channel
     return NextResponse.json({ error: 'bad channel id' }, { status: 400 });
   }
 
-  const body = (await request.json()) as {
+  const body = (await request.json().catch(() => null)) as {
     aliases?: string[];
     contains?: string[];
     exclude?: string[];
@@ -31,7 +31,10 @@ export async function PUT(request: Request, context: { params: Promise<{ channel
      * those, and rejecting them would make "clear this" an error.
      */
     minResolution?: string | null;
-  };
+  } | null;
+  if (body === null) {
+    return NextResponse.json({ error: 'body is not JSON' }, { status: 400 });
+  }
   const clean = (values: string[] | undefined) =>
     (values ?? []).map((v) => v.trim()).filter(Boolean);
 

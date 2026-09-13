@@ -12,7 +12,7 @@ export async function PUT(request: Request, context: { params: Promise<{ groupId
     return NextResponse.json({ error: 'bad group id' }, { status: 400 });
   }
 
-  const body = (await request.json()) as {
+  const body = (await request.json().catch(() => null)) as {
     mode?: string;
     graceMinutes?: number;
     windowMinutes?: number;
@@ -23,7 +23,10 @@ export async function PUT(request: Request, context: { params: Promise<{ groupId
      * Absent keeps what is stored; `null` and `""` read as `none`.
      */
     minResolution?: string | null;
-  };
+  } | null;
+  if (body === null) {
+    return NextResponse.json({ error: 'body is not JSON' }, { status: 400 });
+  }
   const mode = body.mode ?? ALWAYS;
   if (!VALID_MODES.includes(mode as never)) {
     return NextResponse.json({ error: `unknown mode ${mode}` }, { status: 400 });

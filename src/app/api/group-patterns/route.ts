@@ -18,7 +18,7 @@ interface PatternRow {
 
 /** Add or replace a name-pattern rule, and report which groups it would hit. */
 export async function PUT(request: Request) {
-  const body = (await request.json()) as {
+  const body = (await request.json().catch(() => null)) as {
     pattern?: string;
     mode?: string;
     audioOnly?: boolean;
@@ -30,7 +30,10 @@ export async function PUT(request: Request) {
      * stored; `null` and `""` read as `none`.
      */
     minResolution?: string | null;
-  };
+  } | null;
+  if (body === null) {
+    return NextResponse.json({ error: 'body is not JSON' }, { status: 400 });
+  }
   const pattern = (body.pattern ?? '').trim();
   const mode = body.mode ?? ALWAYS;
 
