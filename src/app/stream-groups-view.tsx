@@ -38,6 +38,8 @@ export function StreamGroupsView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // A glob about to be dropped, and how many other groups go back on with it.
+  const [pending, setPending] = useState<{ rule: string; others: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,15 +87,14 @@ export function StreamGroupsView() {
   const toggle = (group: StreamGroup) => {
     // Switching off adds the exact name; switching on removes whatever rule
     // covered it, which for a glob means dropping the glob. Saying so is
-    // better than silently taking 40 other groups back with it.
+    // better than silently taking 40 other groups back with it -- asked on the
+    // page, where a browser dialog stopped everything to ask it.
     if (group.excluded) {
       const rule = group.excludedBy ?? group.name;
       if (rule !== group.name) {
         const covered = groups.filter((g) => g.excludedBy === rule).length;
-        if (
-          covered > 1 &&
-          !confirm(`"${rule}" also covers ${covered - 1} other group(s). Remove the whole rule?`)
-        ) {
+        if (covered > 1) {
+          setPending({ rule, others: covered - 1 });
           return;
         }
       }
@@ -163,6 +164,34 @@ export function StreamGroupsView() {
         </div>
       )}
 
+      {pending && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-warn)] px-3 py-2 text-sm">
+          <span className="min-w-0 flex-1">
+            <span className="mono">{pending.rule}</span> also switches off {pending.others} other
+            group{pending.others === 1 ? '' : 's'}. Switch all of them back on?
+          </span>
+          <button
+            type="button"
+            disabled={saving}
+            className={`${btn} px-3 py-1.5 text-sm`}
+            onClick={() => {
+              const { rule } = pending;
+              setPending(null);
+              void save(excludeGroups.filter((g) => g !== rule));
+            }}
+          >
+            Switch all on
+          </button>
+          <button
+            type="button"
+            className={`${btn} px-3 py-1.5 text-sm`}
+            onClick={() => setPending(null)}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {visible.length > 0 && (
         <ul className="mt-3 max-h-[420px] overflow-y-auto">
           {visible.map((g) => (
@@ -202,7 +231,9 @@ export function StreamGroupsView() {
                 }`}
                 onClick={() => toggle(g)}
               >
-                {g.excluded ? 'on' : 'off'}
+                {/* The verb, not the state: a pill reading "off" on a group
+                    that was on read as the group being off. */}
+                {g.excluded ? 'Switch on' : 'Switch off'}
               </button>
             </li>
           ))}
