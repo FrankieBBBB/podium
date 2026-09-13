@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { globToRegExp } from '@/lib/eligibility';
+import { compileGlob } from '@/lib/eligibility';
 import {
   index,
   matcher,
@@ -40,7 +40,7 @@ export async function GET() {
     }
 
     const excludeGroups = m.guards.excludeGroups;
-    const tests = excludeGroups.map((glob) => globToRegExp(glob));
+    const tests = excludeGroups.map((glob) => compileGlob(glob));
     const groups = streamGroups(snap, claimed).map((g) => ({
       ...g,
       excluded: idx.excludedGroups.has(g.id),

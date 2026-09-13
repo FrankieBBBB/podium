@@ -24,7 +24,7 @@
  * have no way to apply.
  */
 
-import { assignmentIsRule, globToRegExp, type PolicyMode } from './eligibility';
+import { assignmentIsRule, compileGlob, type Glob, type PolicyMode } from './eligibility';
 // Type-only, and deliberately: `miner.ts` imports real values from here, so a
 // value import in this direction would be a runtime cycle. Erased at compile.
 import type { ConsolidatedToken } from './miner';
@@ -227,15 +227,15 @@ export type ScopeVerdict = 'in' | 'excluded' | 'not-included' | 'not-event' | 'u
 
 interface CompiledScope {
   eventOnly: boolean;
-  include: RegExp[];
-  exclude: RegExp[];
+  include: Glob[];
+  exclude: Glob[];
 }
 
 function compileScope(scope: QualityScope): CompiledScope {
   return {
     eventOnly: scope.eventOnly,
-    include: scope.include.map(globToRegExp),
-    exclude: scope.exclude.map(globToRegExp),
+    include: scope.include.map((glob) => compileGlob(glob)),
+    exclude: scope.exclude.map((glob) => compileGlob(glob)),
   };
 }
 

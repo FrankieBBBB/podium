@@ -19,7 +19,7 @@
  * rewrite of every pattern in the file.
  */
 
-import { globToRegExp } from './eligibility';
+import { compileGlob } from './eligibility';
 import {
   matchKey,
   type NormalizedName,
@@ -147,7 +147,7 @@ export function resolveExcludedGroups(
       `buildIndex needs the group list to apply exclude_groups (${globs.join(', ')})`,
     );
   }
-  const tests = globs.map((glob) => globToRegExp(glob));
+  const tests = globs.map((glob) => compileGlob(glob));
   for (const [id, name] of groupNames) {
     if (tests.some((test) => test.test(name))) out.add(id);
   }

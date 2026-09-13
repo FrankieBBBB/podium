@@ -17,10 +17,10 @@ import {
   ALWAYS,
   ASSIGNED,
   assignmentIsRule,
+  compileGlob,
   currentProgrammes,
   describeVerdict,
   Eligibility,
-  globToRegExp,
   NEVER,
   nextProgrammeStarts,
   parseGroupPatterns,
@@ -1009,9 +1009,52 @@ describe('group name patterns', () => {
 
   it('escapes regex metacharacters in the glob', () => {
     // "|" and "." are literal in a group name, not alternation and any-char.
-    expect(globToRegExp('Auto | *').test('Auto | Baseball')).toBe(true);
-    expect(globToRegExp('Auto | *').test('Autox Baseball')).toBe(false);
-    expect(globToRegExp('a.b').test('axb')).toBe(false);
+    expect(compileGlob('Auto | *').test('Auto | Baseball')).toBe(true);
+    expect(compileGlob('Auto | *').test('Autox Baseball')).toBe(false);
+    expect(compileGlob('a.b').test('axb')).toBe(false);
+  });
+
+  it('matches a glob the way the regex it replaced did', () => {
+    const cases: Array<[string, string, boolean]> = [
+      ['*', '', true],
+      ['*', 'anything', true],
+      ['', '', true],
+      ['', 'x', false],
+      ['?', '', false],
+      ['?', 'x', true],
+      ['a?c', 'abc', true],
+      ['a?c', 'ac', false],
+      ['US| *', 'us| espn', true],
+      ['*sports*', 'Fox Sports 1', true],
+      ['*sports', 'Fox Sports 1', false],
+      ['a*b*c', 'axxbyyc', true],
+      ['a*b*c', 'axxbyyb', false],
+      ['*ab', 'aab', true],
+      ['a**b', 'ab', true],
+      // A literal `*` in the name is still matched by `*` in the pattern.
+      ['PPV *', 'PPV * 1', true],
+    ];
+    for (const [glob, name, expected] of cases) {
+      expect(compileGlob(glob).test(name), `${glob} ~ ${name}`).toBe(expected);
+      const regex = new RegExp(
+        `^${glob
+          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+          .replace(/\*/g, '.*')
+          .replace(/\?/g, '.')}$`,
+        'i',
+      );
+      expect(regex.test(name), `regex ${glob} ~ ${name}`).toBe(expected);
+    }
+  });
+
+  it('answers a pathological glob without backtracking through every split', () => {
+    // Eighteen seconds as a regex, and the event loop with it. Sixteen stars
+    // and a longer name would not finish at all; the suite's timeout is the
+    // assertion that this does.
+    const glob = `${'*x'.repeat(16)}*!`;
+    const name = 'x'.repeat(200);
+    expect(compileGlob(glob).test(name)).toBe(false);
+    expect(compileGlob(glob).test(`${name}!`)).toBe(true);
   });
 
   it('parses and validates pattern rules', () => {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ALWAYS, globToRegExp, VALID_MODES } from '@/lib/eligibility';
+import { ALWAYS, compileGlob, VALID_MODES } from '@/lib/eligibility';
 import { parseMinResolution } from '@/lib/resolution';
 import { readRulesDoc, snapshot, userGroups, writeRulesDoc } from '@/lib/server/state';
 
@@ -94,7 +94,7 @@ export async function PUT(request: Request) {
   writeRulesDoc(doc);
 
   const snap = await snapshot();
-  const test = globToRegExp(pattern);
+  const test = compileGlob(pattern);
   const affected = userGroups(snap)
     .filter((g) => test.test(g.name))
     .map((g) => ({ id: g.id, name: g.name, channels: g.channels }));
