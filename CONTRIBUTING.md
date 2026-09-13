@@ -10,10 +10,12 @@ knowing before you spend an afternoon on a branch.
 It does not mean GitHub is a dead end:
 
 - **Issues and discussions on GitHub are read and answered.** Open them there.
-- **Pull requests on GitHub are welcome, and are landed by replaying the
-  commits upstream.** Your PR will close rather than show as merged, and the
-  commit that lands keeps your authorship. Say so in the PR if you would rather
-  it were squashed under your name alone.
+- **Pull requests on GitHub are welcome, and are landed by merging your branch
+  upstream.** Your commits land unchanged, so the PR shows as merged here once
+  the mirror syncs. Review fixes, and a merge of `main` if your branch has
+  drifted, go on top as separate commits rather than rewriting yours. Say so in
+  the PR if you would rather it were squashed under your name alone; it will
+  then close rather than show as merged.
 
 ## Getting set up
 
