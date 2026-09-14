@@ -109,7 +109,8 @@ makes every request carry it: `Authorization: Bearer <token>`, an
 `http://podium.lan:3456/?token=<token>` once puts it in that cookie and takes it
 back out of the URL, which is how you log a browser in without a login page.
 `/api/health` is exempt so the container's own health check still works;
-`/api/metrics` is not, so give Prometheus a `bearer_token`.
+`/api/metrics` is not, so give Prometheus the token too — see
+[Metrics](#metrics) for a scrape job.
 
 **Behind a reverse proxy, say so.** Some proxies forward the browser's `Host`
 header and some replace it with the address they are proxying to — nginx's
@@ -482,6 +483,37 @@ catalogue snapshot.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `PODIUM_METRICS_CHANNELS` | `true` | also expose the per-channel source series — every managed channel's slots with provider and verdict; the only families that scale with the catalogue, so the switch exists for a Prometheus watching its cardinality |
+
+A scrape job needs the path, and the token if you set one:
+
+```yaml
+scrape_configs:
+  - job_name: podium
+    metrics_path: /api/metrics
+    scrape_interval: 60s
+    authorization: # only with PODIUM_AUTH_TOKEN set
+      credentials: <PODIUM_AUTH_TOKEN>
+    static_configs:
+      - targets: ["podium:3456"]
+```
+
+Verdicts change at pass cadence, and every scrape re-reads the whole probe
+cache, so a minute is plenty.
+
+### Example dashboard
+
+[`docs/grafana/podium-provider-quality.json`](grafana/podium-provider-quality.json)
+is a Grafana dashboard built on these families. Import it through
+**Dashboards → New → Import** and pick your Prometheus data source from the
+selector at the top. It has a provider scorecard, who holds each channel's
+primary slot, verdict and resolution mix, why streams die, every managed
+channel's sources in order (needs `PODIUM_METRICS_CHANNELS`), and the worker's
+own health: freshness, deferral, lanes and lineup changes.
+
+Every panel's description says how to read it, including the caveats below.
+Time-series panels aggregate `by (provider)`. Without that, each restart of a
+pod or container under a new `pod` or `instance` label draws a second line for
+the same provider.
 
 ### Comparing providers
 
