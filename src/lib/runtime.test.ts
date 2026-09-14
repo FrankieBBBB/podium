@@ -1236,6 +1236,57 @@ describe('Runner.plan (managed set + oldest check)', () => {
     );
   }
 
+  it('names an after-kickoff channel when its window opens, and not once it is checked', () => {
+    const rules = new RulesSource(rulesPath);
+    const messages: string[] = [];
+    const runner = new Runner({
+      config: () => loadConfig({ DISPATCHARR_API_KEY: 'k' }),
+      store,
+      rules,
+      log: (m) => messages.push(m),
+    });
+    const now = Date.now();
+    const programmes = new Map([
+      [
+        'tnt.id',
+        {
+          tvgId: 'tnt.id',
+          start: new Date(now - 10 * 60_000),
+          end: new Date(now + 3_600_000),
+          title: 'Game',
+          isLive: true,
+        },
+      ],
+    ]);
+    const call = () =>
+      (runner as unknown as { plan: (...args: unknown[]) => unknown }).plan.call(
+        runner,
+        channels,
+        streams,
+        programmes,
+        rules.get().eligibility,
+        { cached: 0 },
+        {},
+        groupNames,
+        { next: new Map(), nextLive: new Map() },
+        null,
+      );
+
+    call();
+    const opened = messages.filter((m) => m.includes('after kickoff'));
+    expect(opened).toHaveLength(1);
+    expect(opened[0]).toMatch(
+      /^channel 3 \(TNT\): after kickoff, 1 stream\(s\) due -- started \d\d:\d\dZ "Game"$/,
+    );
+
+    // Checked and cached: the window is still open, but there is nothing new
+    // to say, and a line a minute for three hours would bury the one that was.
+    store.put(30, 'h', result());
+    messages.length = 0;
+    call();
+    expect(messages.filter((m) => m.includes('after kickoff'))).toEqual([]);
+  });
+
   it('keeps eligible and time-gated streams, drops never, and ages only the eligible', () => {
     const rules = new RulesSource(rulesPath);
     const eligibility = rules.get().eligibility;
