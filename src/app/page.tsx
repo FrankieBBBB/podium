@@ -12,11 +12,12 @@ import { OrderingView } from './ordering-view';
 import { ProgressView } from './progress-view';
 import { QualityView } from './quality-view';
 import { SettingsView } from './settings-view';
+import { StatsView } from './stats-view';
 import { StreamGroupsView } from './stream-groups-view';
 import { StreamSearch } from './stream-search';
 
 type Mode = 'always' | 'never' | 'after_epg_start' | 'assigned';
-type Tab = 'groups' | 'all' | 'dead' | 'rules' | 'progress' | 'quality' | 'settings';
+type Tab = 'groups' | 'all' | 'dead' | 'rules' | 'progress' | 'stats' | 'quality' | 'settings';
 type SettingsSection = 'general' | 'ordering' | 'stream-groups' | 'name-noise' | 'backup';
 type ChanFilter = 'all' | 'regex' | 'nomatch' | 'dead';
 
@@ -184,6 +185,7 @@ const TAB_LABELS: Record<Tab, string> = {
   dead: 'Dead',
   rules: 'Name rules',
   progress: 'Progress',
+  stats: 'Stats',
   quality: 'Quality',
   settings: 'Settings',
 };
@@ -312,6 +314,7 @@ export default function Page() {
         t === 'dead' ||
         t === 'rules' ||
         t === 'progress' ||
+        t === 'stats' ||
         t === 'quality' ||
         t === 'settings'
         ? t
@@ -970,7 +973,16 @@ export default function Page() {
             <div className="flex items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-panel)] px-5 py-3">
               <nav className="no-scrollbar -my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1">
                 {(
-                  ['groups', 'all', 'dead', 'rules', 'progress', 'quality', 'settings'] as const
+                  [
+                    'groups',
+                    'all',
+                    'dead',
+                    'rules',
+                    'progress',
+                    'stats',
+                    'quality',
+                    'settings',
+                  ] as const
                 ).map((t) => (
                   <button
                     type="button"
@@ -999,6 +1011,8 @@ export default function Page() {
             </div>
 
             {tab === 'progress' && <ProgressView />}
+
+            {tab === 'stats' && <StatsView />}
 
             {tab === 'dead' && <DeadView onOpenChannel={openDeadChannel} />}
 
