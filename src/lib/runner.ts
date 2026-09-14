@@ -935,6 +935,11 @@ export class Runner {
   private running = false;
   /** The EPG grid is large and slow-changing; reuse it across passes. */
   private readonly epg = new EpgCache<unknown[]>();
+  /**
+   * Channel id -> start of the programme its "after kickoff" line was logged
+   * for. One entry per channel at most: the next event replaces it.
+   */
+  private readonly kickoffLogged = new Map<number, number>();
   private progress: Omit<Progress, 'updatedAt'> = {
     runId: null,
     phase: 'idle',
@@ -2399,20 +2404,25 @@ export class Runner {
       }
 
       // An event channel opening is the moment somebody using after-kickoff is
-      // waiting for, and the pass line only counts probes. Logged when the
-      // channel has streams to probe rather than on every pass of its window:
-      // once checked they are cached, so this is a line per event, not a line
-      // a minute for three hours.
+      // waiting for, and the pass line only counts probes. Logged once per
+      // programme, not whenever the channel has streams due: streams on a
+      // provider yielded to a viewer stay due for as long as the viewer stays,
+      // and on a live install that repeated the line on every pass -- 21 times
+      // in 23 minutes per channel, and it would have gone on for the whole game.
       if (policy.mode === AFTER_EPG_START && scored.length > queuedBefore) {
         const programme = programmes.get(channel.tvgId);
-        const started = programme
-          ? ` -- started ${programme.start.toISOString().slice(11, 16)}Z` +
-            (programme.title ? ` "${programme.title}"` : '')
-          : '';
-        log(
-          `channel ${channel.id} (${channel.name}): after kickoff, ` +
-            `${scored.length - queuedBefore} stream(s) due${started}`,
-        );
+        const opened = programme?.start.getTime();
+        if (opened === undefined || this.kickoffLogged.get(channel.id) !== opened) {
+          if (opened !== undefined) this.kickoffLogged.set(channel.id, opened);
+          const started = programme
+            ? ` -- started ${programme.start.toISOString().slice(11, 16)}Z` +
+              (programme.title ? ` "${programme.title}"` : '')
+            : '';
+          log(
+            `channel ${channel.id} (${channel.name}): after kickoff, ` +
+              `${scored.length - queuedBefore} stream(s) due${started}`,
+          );
+        }
       }
 
       if (hits.length > 0) {

@@ -1287,6 +1287,59 @@ describe('Runner.plan (managed set + oldest check)', () => {
     expect(messages.filter((m) => m.includes('after kickoff'))).toEqual([]);
   });
 
+  it('names an after-kickoff channel once per programme, even while its streams stay due', () => {
+    // The live case: a viewer on the provider holding these streams keeps them
+    // deferred, so they are due on every pass for the whole game. The line
+    // said so on every pass too -- 21 times in 23 minutes per channel.
+    const rules = new RulesSource(rulesPath);
+    const messages: string[] = [];
+    const runner = new Runner({
+      config: () => loadConfig({ DISPATCHARR_API_KEY: 'k' }),
+      store,
+      rules,
+      log: (m) => messages.push(m),
+    });
+    const now = Date.now();
+    const programmeFrom = (start: number) =>
+      new Map([
+        [
+          'tnt.id',
+          {
+            tvgId: 'tnt.id',
+            start: new Date(start),
+            end: new Date(now + 3_600_000),
+            title: 'Game',
+            isLive: true,
+          },
+        ],
+      ]);
+    const call = (programmes: Map<string, unknown>) =>
+      (runner as unknown as { plan: (...args: unknown[]) => unknown }).plan.call(
+        runner,
+        channels,
+        streams,
+        programmes,
+        rules.get().eligibility,
+        { cached: 0 },
+        {},
+        groupNames,
+        { next: new Map(), nextLive: new Map() },
+        null,
+      );
+    const kickoffLines = () => messages.filter((m) => m.includes('after kickoff'));
+
+    const first = programmeFrom(now - 10 * 60_000);
+    call(first);
+    call(first);
+    call(first);
+    expect(kickoffLines()).toHaveLength(1);
+
+    // The next event on the same channel is a new opening, and says so. Six
+    // minutes in, so it is past the default five-minute wait.
+    call(programmeFrom(now - 6 * 60_000));
+    expect(kickoffLines()).toHaveLength(2);
+  });
+
   it('keeps eligible and time-gated streams, drops never, and ages only the eligible', () => {
     const rules = new RulesSource(rulesPath);
     const eligibility = rules.get().eligibility;
