@@ -73,7 +73,9 @@ export function GET() {
     const cache = store.cacheStats();
     const oldestProbedAt = progress.oldestManagedProbedAt ?? cache.oldestProbedAt;
     const oldestProbeAgeSeconds =
-      oldestProbedAt === null ? null : Math.max(0, Math.round((Date.now() - oldestProbedAt) / 1000));
+      oldestProbedAt === null
+        ? null
+        : Math.max(0, Math.round((Date.now() - oldestProbedAt) / 1000));
     const freshnessTargetSeconds = Math.round(config.PODIUM_MAX_AGE_MS / 1000);
     const lastRun = store.recentRuns(1)[0] ?? null;
 

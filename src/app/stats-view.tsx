@@ -15,11 +15,19 @@ interface Stats {
   primary: { total: number; healthy: number };
   providers: Array<{ name: string; primary: number; healthy: number }>;
   freshness: { oldestProbeAgeSeconds: number | null; targetSeconds: number; breaching: boolean };
-  lastRun: { started_at: number; finished_at: number | null; probed: number; dead: number; reordered: number; error: string | null } | null;
+  lastRun: {
+    started_at: number;
+    finished_at: number | null;
+    probed: number;
+    dead: number;
+    reordered: number;
+    error: string | null;
+  } | null;
 }
 
 const card = 'rounded-xl border border-[var(--color-line)] bg-[var(--color-panel)]';
-const percent = (value: number, total: number) => (total ? `${Math.round((value / total) * 100)}%` : '—');
+const percent = (value: number, total: number) =>
+  total ? `${Math.round((value / total) * 100)}%` : '—';
 const duration = (seconds: number) => {
   if (seconds < 60) return `${seconds}s`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
@@ -63,7 +71,8 @@ export function StatsView() {
             {percent(stats.streams.healthy, stats.streams.measured)}
           </p>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
-            {stats.streams.healthy.toLocaleString()} usable · {percent(stats.streams.measured, stats.streams.total)} measured
+            {stats.streams.healthy.toLocaleString()} usable ·{' '}
+            {percent(stats.streams.measured, stats.streams.total)} measured
           </p>
         </section>
         <section className={`${card} p-4`}>
@@ -77,8 +86,12 @@ export function StatsView() {
         </section>
         <section className={`${card} p-4`}>
           <p className="text-sm text-[var(--color-muted)]">Probe freshness</p>
-          <p className={`mt-1 text-3xl font-semibold tabular-nums ${stats.freshness.breaching ? 'text-[var(--color-bad)]' : ''}`}>
-            {stats.freshness.oldestProbeAgeSeconds === null ? '—' : duration(stats.freshness.oldestProbeAgeSeconds)}
+          <p
+            className={`mt-1 text-3xl font-semibold tabular-nums ${stats.freshness.breaching ? 'text-[var(--color-bad)]' : ''}`}
+          >
+            {stats.freshness.oldestProbeAgeSeconds === null
+              ? '—'
+              : duration(stats.freshness.oldestProbeAgeSeconds)}
           </p>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
             {stats.freshness.oldestProbeAgeSeconds === null
@@ -92,12 +105,16 @@ export function StatsView() {
           <p className="text-sm text-[var(--color-muted)]">Worker</p>
           <p className="mt-1 text-3xl font-semibold capitalize">{workerLabel}</p>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
-            {stats.heartbeatAgeSeconds === null ? 'No heartbeat yet' : `Heartbeat ${stats.heartbeatAgeSeconds}s ago`}
+            {stats.heartbeatAgeSeconds === null
+              ? 'No heartbeat yet'
+              : `Heartbeat ${stats.heartbeatAgeSeconds}s ago`}
           </p>
         </section>
       </div>
 
-      <section className={`${card} grid divide-y divide-[var(--color-line)] sm:grid-cols-5 sm:divide-x sm:divide-y-0`}>
+      <section
+        className={`${card} grid divide-y divide-[var(--color-line)] sm:grid-cols-5 sm:divide-x sm:divide-y-0`}
+      >
         {[
           ['Usable', stats.streams.states.alive],
           ['Dead', stats.streams.states.dead],
@@ -107,7 +124,9 @@ export function StatsView() {
         ].map(([label, count]) => (
           <div key={String(label)} className="px-4 py-3">
             <p className="text-sm text-[var(--color-muted)]">{label}</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">{Number(count).toLocaleString()}</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">
+              {Number(count).toLocaleString()}
+            </p>
           </div>
         ))}
       </section>
@@ -120,11 +139,16 @@ export function StatsView() {
           </p>
         </div>
         {stats.primary.total === 0 ? (
-          <p className="p-4 text-sm text-[var(--color-muted)]">Available after the worker records its first catalogue snapshot.</p>
+          <p className="p-4 text-sm text-[var(--color-muted)]">
+            Available after the worker records its first catalogue snapshot.
+          </p>
         ) : (
           <ul className="divide-y divide-[var(--color-line)]">
             {stats.providers.map((provider) => (
-              <li key={provider.name} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 px-4 py-3">
+              <li
+                key={provider.name}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 px-4 py-3"
+              >
                 <div className="min-w-0">
                   <p className="truncate font-medium">{provider.name}</p>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--color-line)]">
@@ -135,8 +159,13 @@ export function StatsView() {
                   </div>
                 </div>
                 <div className="text-right text-sm tabular-nums">
-                  <p>{percent(provider.primary, stats.primary.total)} primary{provider.primary / stats.primary.total > 0.5 ? ' · concentrated' : ''}</p>
-                  <p className="mt-1 text-[var(--color-muted)]">{percent(provider.healthy, provider.primary)} healthy</p>
+                  <p>
+                    {percent(provider.primary, stats.primary.total)} primary
+                    {provider.primary / stats.primary.total > 0.5 ? ' · concentrated' : ''}
+                  </p>
+                  <p className="mt-1 text-[var(--color-muted)]">
+                    {percent(provider.healthy, provider.primary)} healthy
+                  </p>
                 </div>
               </li>
             ))}

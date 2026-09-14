@@ -973,7 +973,16 @@ export default function Page() {
             <div className="flex items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-panel)] px-5 py-3">
               <nav className="no-scrollbar -my-1 flex min-w-0 flex-1 gap-2 overflow-x-auto py-1">
                 {(
-                  ['groups', 'all', 'dead', 'rules', 'progress', 'stats', 'quality', 'settings'] as const
+                  [
+                    'groups',
+                    'all',
+                    'dead',
+                    'rules',
+                    'progress',
+                    'stats',
+                    'quality',
+                    'settings',
+                  ] as const
                 ).map((t) => (
                   <button
                     type="button"
