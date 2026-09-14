@@ -1739,7 +1739,7 @@
     {
       "type": "table",
       "title": "Every managed channel, its sources in Dispatcharr order",
-      "description": "Slot 0 is what plays first; each row below it is a fallback in the order podium wrote. State is podium's verdict for that exact stream — check a provider's name against its slots to see who is carrying whom. Needs PODIUM_METRICS_CHANNELS on (default). The join key is (channel_id, slot); channel_name rides only podium_channel_source_info, so there is exactly one such field to rename and nothing to exclude.",
+      "description": "Slot 0 is what plays first; each row below it is a fallback in the order podium wrote. State is podium's verdict for that exact stream — check a provider's name against its slots to see who is carrying whom. Needs PODIUM_METRICS_CHANNELS on (default). THE JOIN IS IN THE PROMQL, not a transformation: Grafana's join-by-field takes one field and cannot key on (channel_id, slot), so every query folds info and state onto its own series and all three carry identical labels, which the merge transformation lines up row by row. max by also drops pod, so a restart overlap cannot split a row.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1753,90 +1753,52 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "podium_channel_source_info",
+          "expr": "max by (channel_id, slot, channel_name, provider, state) (max by (channel_id, slot, channel_name, provider) (podium_channel_source_info) * on (channel_id, slot) group_left (state) max by (channel_id, slot, state) (podium_channel_source_state))",
           "instant": true,
           "format": "table"
         },
         {
           "refId": "B",
-          "expr": "podium_channel_source_state",
+          "expr": "max by (channel_id, slot, channel_name, provider, state) (max by (channel_id, slot) (podium_channel_source_height_pixels) * on (channel_id, slot) group_left (channel_name, provider, state) max by (channel_id, slot, channel_name, provider, state) (max by (channel_id, slot, channel_name, provider) (podium_channel_source_info) * on (channel_id, slot) group_left (state) max by (channel_id, slot, state) (podium_channel_source_state)))",
           "instant": true,
           "format": "table"
         },
         {
           "refId": "C",
-          "expr": "podium_channel_source_height_pixels",
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "D",
-          "expr": "podium_channel_source_bitrate_kbps",
+          "expr": "max by (channel_id, slot, channel_name, provider, state) (max by (channel_id, slot) (podium_channel_source_bitrate_kbps) * on (channel_id, slot) group_left (channel_name, provider, state) max by (channel_id, slot, channel_name, provider, state) (max by (channel_id, slot, channel_name, provider) (podium_channel_source_info) * on (channel_id, slot) group_left (state) max by (channel_id, slot, state) (podium_channel_source_state)))",
           "instant": true,
           "format": "table"
         }
       ],
       "transformations": [
         {
-          "id": "joinByField",
-          "options": {
-            "byField": [
-              "channel_id",
-              "slot"
-            ],
-            "mode": "outer"
-          }
+          "id": "merge",
+          "options": {}
         },
         {
           "id": "organize",
           "options": {
             "excludeByName": {
               "Time": true,
-              "Time 1": true,
-              "Time 2": true,
-              "Time 3": true,
-              "__name__": true,
-              "__name__ 1": true,
-              "__name__ 2": true,
-              "__name__ 3": true,
-              "job": true,
-              "job 1": true,
-              "job 2": true,
-              "job 3": true,
-              "instance": true,
-              "instance 1": true,
-              "instance 2": true,
-              "instance 3": true,
-              "namespace": true,
-              "namespace 1": true,
-              "namespace 2": true,
-              "namespace 3": true,
-              "pod": true,
-              "pod 1": true,
-              "pod 2": true,
-              "pod 3": true,
-              "service": true,
-              "service 1": true,
-              "service 2": true,
-              "service 3": true,
-              "container": true,
-              "container 1": true,
-              "container 2": true,
-              "container 3": true,
-              "endpoint": true,
-              "endpoint 1": true,
-              "endpoint 2": true,
-              "endpoint 3": true,
-              "Value #A": true,
-              "Value #B": true
+              "Value #A": true
+            },
+            "indexByName": {
+              "channel_name": 0,
+              "slot": 1,
+              "provider": 2,
+              "state": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "channel_id": 6
             },
             "renameByName": {
               "channel_name": "Channel",
               "slot": "Slot",
               "provider": "Provider",
               "state": "State",
-              "Value #C": "Height",
-              "Value #D": "Bitrate"
+              "Value #B": "Height",
+              "Value #C": "Bitrate",
+              "channel_id": "Channel ID"
             }
           }
         }
