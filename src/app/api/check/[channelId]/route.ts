@@ -207,22 +207,44 @@ export async function POST(request: Request, context: { params: Promise<{ channe
     const uuidMap = new Map<string, number>(
       snap.channels.filter((c) => c.uuid).map((c) => [c.uuid as string, c.id]),
     );
-    const watching = await client
-      .activeChannelIds(uuidMap)
-      .then((ids) => ids.length > 0)
-      // Fail closed, as the worker does: unknown means assume somebody is there.
-      .catch(() => true);
-    const reserve = watching ? config.PODIUM_MIN_FREE_SLOTS : 0;
+    // Fail closed, as the worker does: unknown means assume somebody is there.
+    const sessions = await client.activeSessions(uuidMap).catch(() => null);
+    const watching = sessions === null || sessions.length > 0;
+    const loginsByProvider = new Map(snap.providers.map((p) => [p.id, providerLogins(p)]));
+    const providerOfProfile = new Map<number, number>();
+    for (const [providerId, logins] of loginsByProvider) {
+      for (const login of logins) {
+        if (login.dispatcharrProfileId !== null) {
+          providerOfProfile.set(login.dispatcharrProfileId, providerId);
+        }
+      }
+    }
+    // The reserve is for the account somebody is on, not every account: one
+    // viewer must not close a single-connection provider nobody is using. A
+    // session that names no login we know could be on any of them, so then
+    // every provider keeps it.
+    const watchedProviders = sessions?.every(
+      (s) => s.profileId !== null && providerOfProfile.has(s.profileId),
+    )
+      ? new Set(sessions.map((s) => providerOfProfile.get(s.profileId as number) as number))
+      : null;
+    const reserveFor = (providerId: number) =>
+      !watching
+        ? 0
+        : watchedProviders === null || watchedProviders.has(providerId)
+          ? config.PODIUM_MIN_FREE_SLOTS
+          : 0;
 
     // Per-login lane limits, from the same reading of the account the worker
     // uses: one lane per active login, each shrunk by the courtesy reserve
     // and -- when the worker is probing -- the one slot this check yields to it.
-    const loginsByProvider = new Map(snap.providers.map((p) => [p.id, providerLogins(p)]));
     const limits = new Map<string, number>();
-    const shrink = (limit: number) => Math.max(0, limit - reserve - (workerBusy ? 1 : 0));
     for (const [providerId, logins] of loginsByProvider) {
       for (const login of logins) {
-        limits.set(laneKey(providerId, login.id), shrink(login.maxStreams));
+        limits.set(
+          laneKey(providerId, login.id),
+          Math.max(0, login.maxStreams - reserveFor(providerId) - (workerBusy ? 1 : 0)),
+        );
       }
     }
 

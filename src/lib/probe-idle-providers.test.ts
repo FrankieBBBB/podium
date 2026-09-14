@@ -62,16 +62,29 @@ const yielding = (
 
 describe('laneLimits with probeIdleProviders', () => {
   it('keeps the unwatched provider open and yields the watched one', () => {
-    // 8 keeps 5 - 0 in use - 1 courtesy reserve = 4. 7 is not shrunk to its
-    // spare capacity, it is closed: the point is to stay off the account
-    // entirely, not to compete politely on it.
+    // 8 keeps all 5: nobody is on it, so it owes no courtesy reserve. 7 is not
+    // shrunk to its spare capacity, it is closed: the point is to stay off the
+    // account entirely, not to compete politely on it.
     const limits = pacer().laneLimits(
       base,
       watching,
       new Map([['7:0', 1]]),
       yielding([['7:0', 1]]),
     );
-    expect([...limits]).toEqual([['8:0', 4]]);
+    expect([...limits]).toEqual([['8:0', 5]]);
+  });
+
+  it('keeps a one-connection provider nobody is watching open', () => {
+    // The report this was fixed from: watching one big account took the
+    // reserve off every other account too, and 1 - 0 - 1 = 0 closed every
+    // single-connection provider for as long as the viewer stayed.
+    const limits = pacer().laneLimits(
+      new Map([...base, ['9:0', 1]]),
+      watching,
+      new Map([['7:0', 1]]),
+      yielding([['7:0', 1]], new Map([...providerOf, ['9:0', 9]])),
+    );
+    expect(limits.get('9:0')).toBe(1);
   });
 
   it('closes a watched provider’s other logins too', () => {
@@ -150,12 +163,28 @@ describe('laneLimits with probeIdleProviders', () => {
   it('does nothing when the pause it relaxes is switched off', () => {
     // Pausing off already means "compete on every lane's own capacity", and
     // this setting only ever relaxes a pause. Provider 7 keeps 3 - 1 - 1 = 1,
-    // and the generous viewer counts are the right input for that.
+    // and the generous viewer counts are the right input for that. 8 has no
+    // viewer and so no reserve.
     const limits = pacer({ pauseWhenWatching: false }).laneLimits(
       base,
       watching,
       new Map([['7:0', 1]]),
       yielding([['7:0', 1]]),
+    );
+    expect([...limits]).toEqual([
+      ['7:0', 1],
+      ['8:0', 5],
+    ]);
+  });
+
+  it('reserves on every provider when a viewer cannot be placed', () => {
+    // With pausing off nothing yields, but the reserve still has to land on
+    // the account the viewer is on -- and an unplaced viewer could be on any.
+    const limits = pacer({ pauseWhenWatching: false }).laneLimits(
+      base,
+      watching,
+      new Map([['7:0', 1]]),
+      yielding([['7:0', 1]], providerOf, false),
     );
     expect([...limits]).toEqual([
       ['7:0', 1],
@@ -219,9 +248,9 @@ describe('one viewer must not mark every provider busy', () => {
       attributedByLane: attributed,
       allSessionsPlaced: true,
     });
-    // 8 stays open at 3 - 0 attributed - 1 reserve = 2. Charging it the
-    // phantom as well would leave 1, and a two-connection provider none.
-    expect([...limits]).toEqual([['8:0', 2]]);
+    // 8 stays open at 3 - 0 attributed = 3. Charging it the phantom as well
+    // would leave 2, and a one-connection provider none.
+    expect([...limits]).toEqual([['8:0', 3]]);
   });
 });
 

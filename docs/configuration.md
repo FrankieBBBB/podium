@@ -158,6 +158,7 @@ proxy as one worth rotating.
 | `PODIUM_DEAD_TTL_MS` | `10800000` | how soon a stream that *just* died is rechecked |
 | `PODIUM_DEAD_TTL_MAX_MS` | `86400000` | ceiling once that has backed off; [see below](#when-there-is-nothing-to-do) |
 | `PODIUM_UNKNOWN_BITRATE_TTL_MS` | `1800000` | how soon an alive-but-unmeasured stream is tried again; [see below](#streams-whose-bitrate-never-resolved) |
+| `PODIUM_MIN_FREE_SLOTS` | `1` | connections held back on a provider somebody is streaming from; [see below](#when-one-viewer-stops-everything) |
 | `PODIUM_PAUSE_WHEN_WATCHING` | `true` | stop while anyone is streaming |
 | `PODIUM_PROBE_IDLE_PROVIDERS` | `false` | narrow that pause to the provider being watched; [see below](#when-one-viewer-stops-everything) |
 | `PODIUM_PROBE_WATCHED_PROVIDER` | `false` | probe that provider too, on its spare connections; [see below](#sharing-the-provider-being-watched) |
@@ -175,9 +176,16 @@ had spare connections the entire time.
 
 `PODIUM_PROBE_IDLE_PROVIDERS=true` narrows the pause to the account being
 streamed from. That account is yielded completely -- not trimmed to its spare
-slots, closed -- and the rest carry on under the usual per-lane arithmetic,
-including the `PODIUM_MIN_FREE_SLOTS` reserve. A viewer arriving mid-pass only
-stops the pass if they land on a provider it is actually probing.
+slots, closed -- and the rest carry on at their full connection count. A viewer
+arriving mid-pass only stops the pass if they land on a provider it is actually
+probing.
+
+`PODIUM_MIN_FREE_SLOTS` is held back only on the providers somebody is
+streaming from, whichever of these settings is on. Taking it off every provider
+because one has a viewer closes each single-connection account for as long as
+that viewer stays. The exception is a session Podium cannot place on a
+provider: that viewer could be on any of them, so every provider keeps the
+reserve.
 
 Two things to know before turning it on:
 

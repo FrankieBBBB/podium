@@ -145,6 +145,13 @@ export class Pacer {
    * be checked at all -- and a single-connection provider is a common thing to
    * have.
    *
+   * The same holds one level down. "Someone is watching" is a fact about an
+   * account, and taking the reserve off every provider because one of them has
+   * a viewer starves the single-connection accounts nobody is on for as long as
+   * the viewer stays -- one game on a big account closed every small one. So
+   * the reserve comes off the providers carrying viewers only, and off all of
+   * them only when a viewer cannot be placed, since that viewer could be on any.
+   *
    * `yielding` is what makes `probeIdleProviders` possible, and it is one
    * argument rather than two because its halves are useless apart.
    * `providerOf` maps each lane back to its provider: lanes are per login, but
@@ -166,12 +173,19 @@ export class Pacer {
     const out = new Map<string, number>();
     if (this.pausedByActivity(activity)) return out;
 
-    const reserve = activity.idle ? 0 : this.config.minFreeSlots;
+    const watched = activity.idle ? null : this.watchedProviders(yielding);
+    const reserve = (lane: string): number => {
+      if (activity.idle) return 0;
+      const provider = yielding?.providerOf.get(lane);
+      return watched === null || provider === undefined || watched.has(provider)
+        ? this.config.minFreeSlots
+        : 0;
+    };
     const yielded = this.yieldedProviders(activity, yielding);
     if (yielded === 'all') return out;
     if (yielded === 'none' || !yielding) {
       for (const [lane, limit] of base) {
-        const free = limit - (viewersByLane.get(lane) ?? 0) - reserve;
+        const free = limit - (viewersByLane.get(lane) ?? 0) - reserve(lane);
         if (free > 0) out.set(lane, free);
       }
       return out;
@@ -190,7 +204,7 @@ export class Pacer {
       // already charged to somebody else. Left in, it takes a connection off
       // every lane the mode just decided was free, which is enough to close a
       // two-connection provider outright.
-      const free = limit - (yielding.attributedByLane.get(lane) ?? 0) - reserve;
+      const free = limit - (yielding.attributedByLane.get(lane) ?? 0) - reserve(lane);
       if (free > 0) out.set(lane, free);
     }
     for (const [lane, free] of this.sharedLanes(base, yielded, yielding)) {
@@ -308,16 +322,26 @@ export class Pacer {
   yieldedProviders(activity: Activity, yielding?: LaneYielding): 'none' | 'all' | Set<number> {
     if (activity.idle) return 'none';
     if (!this.config.pauseWhenWatching || !this.config.probeIdleProviders) return 'none';
-    if (!yielding?.allSessionsPlaced) return 'all';
+    return this.watchedProviders(yielding) ?? 'all';
+  }
 
+  /**
+   * The providers carrying a viewer, or null when some viewer cannot be placed.
+   *
+   * Null is "could be any of them", and both callers read it that way: the
+   * yield stays off every provider, the reserve comes off every provider. One
+   * test for both, so the two can never disagree about who is on what.
+   */
+  private watchedProviders(yielding?: LaneYielding): Set<number> | null {
+    if (!yielding?.allSessionsPlaced) return null;
     const busy = new Set<number>();
     for (const [lane, viewers] of yielding.attributedByLane) {
       if (viewers <= 0) continue;
       const provider = yielding.providerOf.get(lane);
-      if (provider === undefined) return 'all';
+      if (provider === undefined) return null;
       busy.add(provider);
     }
-    return busy.size === 0 ? 'all' : busy;
+    return busy.size === 0 ? null : busy;
   }
 
   /**
