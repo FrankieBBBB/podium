@@ -1494,7 +1494,7 @@
     {
       "type": "table",
       "title": "Why streams die, by provider",
-      "description": "The dead counts above, bucketed by ffmpeg's last words. auth = credentials or ban; not_found = the stream does not exist any more; server_error = the provider's side falling over; unreachable = network path/DNS; unsupported = a format ffmpeg cannot demux; probe_error is PODIUM's own failure (missing ffprobe, unparseable payload) and must not be held against the provider. The buckets partition each provider's dead count exactly.",
+      "description": "The dead counts above, bucketed by ffmpeg's last words. auth = credentials or ban; not_found = the stream does not exist any more; client_error = refused for another 4xx reason, such as a rate limit or connection cap; server_error = the provider's side falling over; unreachable = network path/DNS; unsupported = a format ffmpeg cannot demux; probe_error is PODIUM's own failure (missing ffprobe, unparseable payload) and must not be held against the provider. The buckets partition each provider's dead count exactly.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1515,6 +1515,12 @@
         {
           "refId": "B",
           "expr": "podium_provider_dead_streams{reason=\"not_found\"}",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "J",
+          "expr": "podium_provider_dead_streams{reason=\"client_error\"}",
           "instant": true,
           "format": "table"
         },
@@ -1590,7 +1596,8 @@
               "Value #F": "unsup",
               "Value #G": "rejected",
               "Value #H": "probe err",
-              "Value #I": "other"
+              "Value #I": "other",
+              "Value #J": "client err"
             }
           }
         }

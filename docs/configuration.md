@@ -520,7 +520,7 @@ the same provider.
 | Family | Labels | What it says |
 | --- | --- | --- |
 | `podium_provider_streams` | `provider`, `state` | distinct managed streams by verdict: `alive` (would rank as usable), `dead`, `black`, `low_bitrate`, `unmeasured` |
-| `podium_provider_dead_streams` | `provider`, `reason` | why the dead ones died — `auth`, `not_found`, `server_error`, `timeout`, `unreachable`, `unsupported`, `rejected`, `probe_error`, `other` |
+| `podium_provider_dead_streams` | `provider`, `reason` | why the dead ones died — `auth`, `not_found`, `client_error`, `server_error`, `timeout`, `unreachable`, `unsupported`, `rejected`, `probe_error`, `other` |
 | `podium_provider_resolution_streams` | `provider`, `resolution` | distinct streams by measured height, whether or not usable |
 | `podium_provider_bitrate_kbps` | `provider`, `resolution`, `stat` | median measured bitrate, overall (`resolution="all"`) and per bucket |
 | `podium_provider_bitrate_measured` | `provider` | how many of those medians rest on a real measurement |
