@@ -12,6 +12,7 @@
 import type { Config } from './config';
 import { type ActiveSession, type Channel, DispatcharrClient, type Stream } from './dispatcharr';
 import {
+  AFTER_EPG_START,
   assignmentIsRule,
   currentProgrammes,
   type Eligibility,
@@ -2187,6 +2188,7 @@ export class Runner {
   } {
     const config = this.deps.config();
     const { store } = this.deps;
+    const log = this.deps.log ?? (() => {});
     // Read once for the pass, not per channel: a mark is a handful of rows and
     // the answer cannot change under us mid-plan without making the pass
     // inconsistent with itself.
@@ -2302,6 +2304,7 @@ export class Runner {
       const hits: Array<[number, number]> = [];
       const freshEntries = new Map<number, Map<number, ProbeResult>>();
       const settledStreams = new Set<number>();
+      const queuedBefore = scored.length;
 
       for (const [streamId, stepOrder] of candidates()) {
         const stream = byId.get(streamId);
@@ -2393,6 +2396,23 @@ export class Runner {
             age: forcedOut ? Number.MAX_SAFE_INTEGER : (age ?? Number.MAX_SAFE_INTEGER),
           });
         }
+      }
+
+      // An event channel opening is the moment somebody using after-kickoff is
+      // waiting for, and the pass line only counts probes. Logged when the
+      // channel has streams to probe rather than on every pass of its window:
+      // once checked they are cached, so this is a line per event, not a line
+      // a minute for three hours.
+      if (policy.mode === AFTER_EPG_START && scored.length > queuedBefore) {
+        const programme = programmes.get(channel.tvgId);
+        const started = programme
+          ? ` -- started ${programme.start.toISOString().slice(11, 16)}Z` +
+            (programme.title ? ` "${programme.title}"` : '')
+          : '';
+        log(
+          `channel ${channel.id} (${channel.name}): after kickoff, ` +
+            `${scored.length - queuedBefore} stream(s) due${started}`,
+        );
       }
 
       if (hits.length > 0) {
@@ -2772,7 +2792,7 @@ export class Runner {
       const would = additions(assigned, ordered);
       const wouldDrop = deadDropped.filter((id) => assigned.includes(id));
       log(
-        `[dry-run] channel ${channelId} -> ${ordered.join(',')}` +
+        `[dry-run] channel ${channelId} (${snapshot.channelName}) -> ${ordered.join(',')}` +
           (would.length > 0 ? ` (would assign ${would.length}: ${describe(would)})` : '') +
           (wouldDrop.length > 0
             ? ` (would remove ${wouldDrop.length} long-dead: ${describe(wouldDrop)})`
@@ -2839,6 +2859,17 @@ export class Runner {
         );
       }
       await client.setStreamOrder(channelId, writeOrder);
+      // Named, like the two lines above. "12 reordered" on the pass line says
+      // nothing about which channels moved or what a viewer now gets first,
+      // and that is the question somebody reading the log is asking.
+      const head = (order: number[]): string =>
+        order.length > 0 ? describe(order.slice(0, 1)) : 'nothing';
+      log(
+        `channel ${channelId} (${snapshot.channelName}): reordered, ` +
+          (writeOrder[0] === baseline[0]
+            ? `lead unchanged ${head(writeOrder)}`
+            : `now leads with ${head(writeOrder)} (was ${head(baseline)})`),
+      );
       counters.reordered += 1;
       counters.assigned += added.length;
       counters.removed += removedDead.length;

@@ -178,4 +178,19 @@ describe('the pass', () => {
     expect(touched.length).toBeGreaterThan(0);
     expect(counters.measured).toBe(0);
   });
+
+  it('names the channel it reordered and what now leads it', async () => {
+    const messages: string[] = [];
+    runner = new Runner({
+      config: () => loadConfig({ DISPATCHARR_API_KEY: 'k', PODIUM_DRY_RUN: 'false' }),
+      store,
+      rules: new RulesSource(join(dir, 'rules.json')),
+      log: (m) => messages.push(m),
+    });
+    await writeBack([plannedFor(false)], spyClient([]));
+
+    expect(messages).toContain(
+      'channel 1 (EPL01): reordered, now leads with 2[Provider A] (was 1[Provider A])',
+    );
+  });
 });
