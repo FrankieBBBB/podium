@@ -60,7 +60,7 @@ const yielding = (
 describe('laneLimits with probeWatchedProvider', () => {
   it('trims the watched account instead of closing it', () => {
     // 7 keeps 5 - 1 viewer - 2 reserve = 2. 8 is untouched by this and stays
-    // on the ordinary arithmetic, reserve of 1 and all.
+    // on the ordinary arithmetic: nobody is on it, so all 5.
     const limits = pacer().laneLimits(
       base,
       watching,
@@ -68,7 +68,7 @@ describe('laneLimits with probeWatchedProvider', () => {
       yielding([['7:0', 1]]),
     );
     expect([...limits]).toEqual([
-      ['8:0', 4],
+      ['8:0', 5],
       ['7:0', 2],
     ]);
   });
@@ -93,7 +93,7 @@ describe('laneLimits with probeWatchedProvider', () => {
       new Map([['7:0', 1]]),
       yielding([['7:0', 1]]),
     );
-    expect([...limits]).toEqual([['8:0', 4]]);
+    expect([...limits]).toEqual([['8:0', 5]]);
   });
 
   it('takes the reserve once per account, not once per login', () => {
