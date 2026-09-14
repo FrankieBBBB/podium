@@ -115,6 +115,19 @@ export interface GroupPolicy {
   minResolution?: MinResolution;
 }
 
+/**
+ * The longest an after-kickoff group may wait. Past the default window the gate
+ * would close before it opened, and the group would silently never be checked.
+ */
+export const MAX_GRACE_MINUTES = 180;
+
+/** Whether a client-sent grace is one the gate can use: whole minutes, 0-180. */
+export function validGraceMinutes(value: unknown): value is number {
+  return (
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_GRACE_MINUTES
+  );
+}
+
 export const DEFAULT_POLICY: GroupPolicy = {
   mode: ALWAYS,
   graceMinutes: 5,

@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
-import { ALWAYS, compileGlob, VALID_MODES } from '@/lib/eligibility';
+import {
+  ALWAYS,
+  compileGlob,
+  MAX_GRACE_MINUTES,
+  VALID_MODES,
+  validGraceMinutes,
+} from '@/lib/eligibility';
 import { parseMinResolution } from '@/lib/resolution';
 import { readRulesDoc, snapshot, userGroups, writeRulesDoc } from '@/lib/server/state';
 
@@ -25,6 +31,8 @@ export async function PUT(request: Request) {
     audio_only?: boolean;
     measureOnly?: boolean;
     measure_only?: boolean;
+    /** Minutes after kickoff before probing. Absent keeps what is stored. */
+    graceMinutes?: number;
     /**
      * `720p`, `1080p`, `2160p`, or `none` to clear it. Absent keeps what is
      * stored; `null` and `""` read as `none`.
@@ -40,6 +48,12 @@ export async function PUT(request: Request) {
   if (!pattern) return NextResponse.json({ error: 'pattern is required' }, { status: 400 });
   if (!VALID_MODES.includes(mode as never)) {
     return NextResponse.json({ error: `unknown mode ${mode}` }, { status: 400 });
+  }
+  if (body.graceMinutes !== undefined && !validGraceMinutes(body.graceMinutes)) {
+    return NextResponse.json(
+      { error: `grace minutes must be a whole number from 0 to ${MAX_GRACE_MINUTES}` },
+      { status: 400 },
+    );
   }
   // As in the group route: clearing a floor is not an error, so only a value
   // that was written and could not be read is.
@@ -74,11 +88,15 @@ export async function PUT(request: Request) {
     // `always` with no custom flags is the default; storing it would just be noise.
     if (existing >= 0) patterns.splice(existing, 1);
   } else {
+    const prior = existing >= 0 ? patterns[existing] : undefined;
     const entry: PatternRow = {
       pattern,
       mode,
-      grace_minutes: 5,
-      window_minutes: 180,
+      // Carried over, as the group route does. Every control on a pattern row
+      // posts only the one thing it changes, and these used to be written back
+      // as 5 and 180 -- so flipping measure-only undid a hand-tuned wait.
+      grace_minutes: body.graceMinutes ?? prior?.grace_minutes ?? 5,
+      window_minutes: prior?.window_minutes ?? 180,
       ...(audioOnly ? { audio_only: true } : {}),
       ...(measureOnly ? { measure_only: true } : {}),
       ...(minResolution ? { min_resolution: minResolution } : {}),
