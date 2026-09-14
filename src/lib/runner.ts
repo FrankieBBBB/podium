@@ -22,6 +22,7 @@ import {
   type UpcomingStarts,
 } from './eligibility';
 import { EpgCache } from './epg-cache';
+import { errorText } from './error-text';
 import type { Matcher, StreamIndex } from './matcher';
 import { resolveOrdering, withResolutionFloor } from './ordering';
 import { Pacer, type PacerConfig, viewersByProvider } from './pacer';
@@ -1989,8 +1990,8 @@ export class Runner {
       }
       return this.finish(runId, started, counters, heldBack, eligibleChannels, lanes, false);
     } catch (error) {
-      store.finishRun(runId, { ...counters, error: String(error).slice(0, 500) });
-      this.emit({ phase: 'failed', message: String(error).slice(0, 200) });
+      store.finishRun(runId, { ...counters, error: errorText(error).slice(0, 500) });
+      this.emit({ phase: 'failed', message: errorText(error).slice(0, 200) });
       throw error;
     } finally {
       this.running = false;
@@ -2075,7 +2076,7 @@ export class Runner {
         unplacedSessions,
       };
     } catch (error) {
-      log(`activity probe failed (${String(error)}) -- assuming busy`);
+      log(`activity probe failed (${errorText(error)}) -- assuming busy`);
       return {
         channelIds: new Set([-1]),
         idle: false,
@@ -2897,7 +2898,7 @@ export class Runner {
         ),
       );
     } catch (error) {
-      log(`reorder failed for channel ${channelId}: ${String(error)}`);
+      log(`reorder failed for channel ${channelId}: ${errorText(error)}`);
     }
   }
 
