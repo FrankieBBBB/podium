@@ -51,6 +51,7 @@ interface PatternRule {
   audioOnly?: boolean;
   measureOnly?: boolean;
   minResolution?: string;
+  graceMinutes?: number;
 }
 
 interface GroupRow {
@@ -58,6 +59,8 @@ interface GroupRow {
   name: string;
   mode: Mode;
   fromPattern: boolean;
+  /** Minutes after kickoff before an after-kickoff group is probed. */
+  grace?: number;
   audioOnly?: boolean;
   measureOnly?: boolean;
   /** Resolved, so a floor that comes from a name rule shows here too. */
@@ -119,7 +122,7 @@ const MODES: Array<{ value: Mode; label: string; hint: string }> = [
   {
     value: 'after_epg_start',
     label: 'After kickoff',
-    hint: 'For event channels: checked once the EPG programme has started. A channel with no rule is ranked off the streams it already carries.',
+    hint: 'For event channels: checked a set number of minutes after the live EPG programme starts. A channel with no rule is ranked off the streams it already carries.',
   },
   {
     value: 'assigned',
@@ -135,6 +138,17 @@ const MODE_CHIP: Record<Mode, string> = {
   after_epg_start: 'kickoff',
   assigned: 'assigned',
 };
+
+/**
+ * Minutes after kickoff to wait before probing. A menu rather than a free
+ * field: it saves on change like the floor beside it, and a value set by hand
+ * in the rules file is added to the list rather than shown as a blank.
+ */
+const GRACE_CHOICES = [0, 1, 2, 3, 5, 10, 15, 20, 30];
+const graceChoices = (current: number): number[] =>
+  [...new Set([...GRACE_CHOICES, current])].sort((a, b) => a - b);
+const GRACE_TITLE =
+  'How long after the live programme starts before its streams are probed. Too soon, and a feed that is about to come up is recorded as dead.';
 
 /** Modes where a channel with no rule is still ranked, off its own assignment. */
 const RANKS_ASSIGNED = new Set<Mode>(['after_epg_start', 'assigned']);
@@ -727,6 +741,24 @@ export default function Page() {
     await load();
   };
 
+  const setGroupGrace = async (id: number, mode: Mode, minutes: number) => {
+    await fetch(`/api/groups/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, graceMinutes: minutes }),
+    });
+    await load();
+  };
+
+  const setPatternGrace = async (pattern: string, mode: Mode, minutes: number) => {
+    await fetch('/api/group-patterns', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pattern, mode, graceMinutes: minutes }),
+    });
+    await load();
+  };
+
   const setPatternFloor = async (pattern: string, mode: Mode, floor: string) => {
     await fetch('/api/group-patterns', {
       method: 'PUT',
@@ -1162,6 +1194,23 @@ export default function Page() {
                       >
                         {p.measureOnly ? '✓ Measure only' : 'Measure only'}
                       </button>
+                      {p.mode === 'after_epg_start' && (
+                        <select
+                          aria-label={`Minutes after kickoff for ${p.pattern}`}
+                          title={GRACE_TITLE}
+                          value={p.graceMinutes ?? 5}
+                          onChange={(e) =>
+                            void setPatternGrace(p.pattern, p.mode as Mode, Number(e.target.value))
+                          }
+                          className="rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-1.5 text-sm"
+                        >
+                          {graceChoices(p.graceMinutes ?? 5).map((n) => (
+                            <option key={n} value={n}>
+                              {n === 0 ? 'At kickoff' : `${n} min after kickoff`}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <select
                         aria-label={`Minimum resolution for ${p.pattern}`}
                         value={p.minResolution ?? ''}
@@ -1356,6 +1405,27 @@ export default function Page() {
                     ))}
                   </select>
                 </label>
+                {group.mode === 'after_epg_start' && (
+                  <label
+                    className="flex items-center gap-2 text-sm text-[var(--color-muted)]"
+                    title={GRACE_TITLE}
+                  >
+                    Check from
+                    <select
+                      value={group.grace ?? 5}
+                      onChange={(e) =>
+                        void setGroupGrace(group.id, group.mode, Number(e.target.value))
+                      }
+                      className="rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-1.5 text-sm"
+                    >
+                      {graceChoices(group.grace ?? 5).map((n) => (
+                        <option key={n} value={n}>
+                          {n === 0 ? 'kickoff' : `kickoff + ${n} min`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </div>
               <p className="mt-2 text-sm text-[var(--color-muted)]">
                 {MODES.find((m) => m.value === group.mode)?.hint}

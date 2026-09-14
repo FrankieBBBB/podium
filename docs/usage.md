@@ -306,6 +306,13 @@ gating on the programme's start alone:
 It works the same way on a name pattern, alongside `grace_minutes` and
 `window_minutes`.
 
+Probing starts `grace_minutes` after that live programme begins — 5 by
+default, because providers rarely have the feed up on the minute and a probe
+that lands early records a stream about to come good as dead. Set it from the
+**Check from** menu on an after-kickoff group, or on its row under name
+patterns; 0 to 180 minutes. Probing stops `window_minutes` (180) after the
+start, which has no control in the UI.
+
 Name patterns like `Auto | *` apply a policy to groups that do not exist yet,
 which matters because Dispatcharr creates groups on its own.
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ALWAYS, VALID_MODES } from '@/lib/eligibility';
+import { ALWAYS, MAX_GRACE_MINUTES, VALID_MODES, validGraceMinutes } from '@/lib/eligibility';
 import { parseMinResolution } from '@/lib/resolution';
 import { readRulesDoc, writeRulesDoc } from '@/lib/server/state';
 
@@ -30,6 +30,12 @@ export async function PUT(request: Request, context: { params: Promise<{ groupId
   const mode = body.mode ?? ALWAYS;
   if (!VALID_MODES.includes(mode as never)) {
     return NextResponse.json({ error: `unknown mode ${mode}` }, { status: 400 });
+  }
+  if (body.graceMinutes !== undefined && !validGraceMinutes(body.graceMinutes)) {
+    return NextResponse.json(
+      { error: `grace minutes must be a whole number from 0 to ${MAX_GRACE_MINUTES}` },
+      { status: 400 },
+    );
   }
   // `null` and `""` are how a client clears a floor, so only a value that was
   // written and could not be read is an error.
