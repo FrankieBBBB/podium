@@ -346,6 +346,14 @@ CREATE TABLE IF NOT EXISTS teamarr_sync (
     outcome     TEXT    NOT NULL
 );
 
+-- The last time PODIUM_TEAMARR_GENERATE_AFTER_MEASURE fired a Teamarr
+-- regeneration, so the debounce in teamarr-generate.ts survives a restart
+-- instead of firing again for the first measure-only pass after every deploy.
+CREATE TABLE IF NOT EXISTS teamarr_generate (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    ran_at      INTEGER NOT NULL
+);
+
 -- One row per *distinct* check result, not per pass that ran one.
 --
 -- A pass runs the check whenever a rule set has been uploaded, which on a
@@ -2085,6 +2093,22 @@ export class Store {
     } catch {
       return null;
     }
+  }
+
+  /** Record that PODIUM_TEAMARR_GENERATE_AFTER_MEASURE fired a regeneration now. */
+  saveTeamarrGenerate(): void {
+    this.sql(
+      `INSERT INTO teamarr_generate (id, ran_at) VALUES (1, ?)
+         ON CONFLICT(id) DO UPDATE SET ran_at = excluded.ran_at`,
+    ).run(Date.now());
+  }
+
+  /** When PODIUM_TEAMARR_GENERATE_AFTER_MEASURE last fired, or null if never. */
+  teamarrGenerate(): number | null {
+    const row = this.sql('SELECT ran_at FROM teamarr_generate WHERE id = 1').get() as
+      | { ran_at: number }
+      | undefined;
+    return row?.ran_at ?? null;
   }
 
   teamarrRules(): { rules: unknown[]; uploadedAt: number } | null {
