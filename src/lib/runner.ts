@@ -29,6 +29,7 @@ import { Pacer, type PacerConfig, viewersByProvider } from './pacer';
 import { type ProbeResult, probe } from './probe';
 import { tierOf } from './quality';
 import { channelResolutionFloor, type MinResolution } from './resolution';
+import { pruneDeletedChannelRules } from './rule-sync';
 import type { RulesSource } from './rules-source';
 import { AbortFlag, laneKey, type ProbeJob, runLanes } from './scheduler';
 
@@ -941,6 +942,11 @@ export class Runner {
    * for. One entry per channel at most: the next event replaces it.
    */
   private readonly kickoffLogged = new Map<number, number>();
+  /**
+   * The last reason a rules sync refused, so a refusal that holds for days is
+   * logged when it starts rather than on every pass.
+   */
+  private ruleSyncRefusal = '';
   private progress: Omit<Progress, 'updatedAt'> = {
     runId: null,
     phase: 'idle',
@@ -1007,6 +1013,46 @@ export class Runner {
       this.deps.store.setProgress(this.progress);
     } catch {
       // Progress is diagnostics; never let it take a run down.
+    }
+  }
+
+  /**
+   * Drop rules whose channel Dispatcharr has deleted -- see `pruneDeletedChannelRules`.
+   *
+   * Here because the channel listing is the one read every pass makes whether
+   * or not it goes on to pause, so a deletion is noticed within a pass at no
+   * extra crawl. Never allowed to fail the pass: a rule for a deleted channel
+   * does no harm for one more.
+   */
+  private async syncRules(
+    client: DispatcharrClient,
+    channels: Channel[],
+    rulesPath: string,
+    log: (message: string) => void,
+  ): Promise<void> {
+    try {
+      const outcome = await pruneDeletedChannelRules(
+        rulesPath,
+        channels.map((c) => c.id),
+        async (id) => (await client.channel(id)) === null,
+      );
+      if (outcome?.refused) {
+        if (outcome.refused !== this.ruleSyncRefusal) log(`rules not synced: ${outcome.refused}`);
+        this.ruleSyncRefusal = outcome.refused;
+        return;
+      }
+      this.ruleSyncRefusal = '';
+      if (!outcome) return;
+      const n = outcome.removed.length;
+      const named = outcome.removed.map((r) => (r.name ? `${r.id} (${r.name})` : String(r.id)));
+      log(
+        `removed ${n} rule${n === 1 ? '' : 's'} for channels deleted in Dispatcharr: ` +
+          named.slice(0, 20).join(', ') +
+          (n > 20 ? `, and ${n - 20} more` : '') +
+          `; the previous file is at ${outcome.backup}`,
+      );
+    } catch (error) {
+      log(`rules not synced: ${errorText(error)}`);
     }
   }
 
@@ -1155,6 +1201,7 @@ export class Runner {
       // exactly the moment Dispatcharr is busy serving the viewer. Measured on
       // a live install, 53% of passes paused this way.
       const [channels, providers] = await Promise.all([client.channels(), client.providers()]);
+      await this.syncRules(client, channels, config.rulesPath, log);
 
       const uuidMap = new Map<string, number>(
         channels.filter((c) => Boolean(c.uuid)).map((c) => [c.uuid!, c.id]),

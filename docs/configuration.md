@@ -328,6 +328,30 @@ Why the gate exists at all, and how to read what it dropped, is in
 | `PODIUM_AUTO_ASSIGN` | `true` | lets a pass put matched streams onto channels that do not carry them; `false` is reorder-only |
 | `PODIUM_AUTO_ASSIGN_MAX` | `0` | ceiling on how many matched streams a channel may gain this way; `0` removes the cap |
 
+### Rules for deleted channels
+
+A rule belongs to a Dispatcharr channel id, so deleting the channel in
+Dispatcharr leaves its rule behind. It never runs, but it still counts: the
+provider stream groups and the stream search show what it matches as claimed,
+by a channel you can no longer find in the UI to fix.
+
+Each pass removes those rules from the rules file on its own, with no setting.
+Dry run does not stop it, because it writes Podium's file, not Dispatcharr. The
+removed ids and names go to the log. Three things hold it back, because a rule
+is aliases somebody wrote:
+
+- **Only a 404 counts.** Missing from the channel list is a suspicion; each
+  missing channel is then looked up on its own, and the rule goes only if
+  Dispatcharr answers that the channel does not exist. A lookup that fails any
+  other way keeps the rule until a later pass can ask again.
+- **Most of the file at once is refused.** When more than half the ruled
+  channels (and more than ten) are missing, nothing is removed and the log says
+  why, once. That is what pointing Podium at a different or rebuilt Dispatcharr
+  looks like, not a tidy-up.
+- **The previous file is kept.** Before each removal the rules file is copied to
+  `rules.json.pruned-<time>` beside it; the newest five copies are kept. Copy one
+  back over `rules.json` to undo.
+
 ### Removing unmatched streams
 
 `PODIUM_REMOVE_UNMATCHED` is the only setting that takes streams *off* a
