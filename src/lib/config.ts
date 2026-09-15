@@ -273,6 +273,35 @@ export const configSchema = z.object({
    * channels is not blocked forever by it.
    */
   PODIUM_TEAMARR_MIN_CHANNELS: num(20),
+  /**
+   * Nudge Teamarr to regenerate right after an after-kickoff probe measures a
+   * channel it owns, instead of waiting for Teamarr's own schedule.
+   *
+   * A `measure_only` group (see `eligibility.ts`) exists because Teamarr, not
+   * Podium, writes the order a viewer gets -- so a fresh verdict from a probe
+   * that just cleared `grace_minutes` sits unused until Teamarr's own EPG job
+   * next runs, which was not timed around any particular kickoff. This closes
+   * that gap the same way `PODIUM_TEAMARR_SYNC` closes the rules one: Podium
+   * already knows the moment a measurement lands, and already talks to
+   * Teamarr's API.
+   *
+   * Off by default. The call is a full `POST /epg/generate` -- Teamarr has no
+   * per-channel or per-event scope for it beyond `team_ids`, which this does
+   * not attempt to resolve -- so this is trading Teamarr write-load for
+   * freshness, and an operator should choose that trade rather than inherit
+   * it on upgrade.
+   */
+  PODIUM_TEAMARR_GENERATE_AFTER_MEASURE: bool(false),
+  /**
+   * Floor between two generate calls this triggers, however many channels
+   * measured in between.
+   *
+   * An after-kickoff pass can clear `grace_minutes` on several channels
+   * within the same tick, and each is a call `run()` would otherwise fire
+   * once per channel -- this collapses that burst into the one call the
+   * whole pass earns, at whatever cost the pass just measured.
+   */
+  PODIUM_TEAMARR_GENERATE_MIN_INTERVAL_MS: num(300_000),
 
   PODIUM_QUALITY_EVENT_ONLY: bool(true),
   /**
