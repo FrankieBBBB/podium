@@ -19,6 +19,7 @@ import { RulesSource } from '../lib/rules-source';
 import { Runner, type RunSummary } from '../lib/runner';
 import { resolveEnv } from '../lib/settings';
 import { Store } from '../lib/store';
+import { triggerGenerateAfterMeasure } from '../lib/teamarr-generate';
 import { DEFER_RETRY_MS, syncToTeamarr } from '../lib/teamarr-sync';
 
 export type Log = (message: string) => void;
@@ -240,6 +241,15 @@ export async function startWorker(config: Config, log: Log): Promise<() => void>
         if (held.length > 0) {
           log(`held back: ${held.map(([why, n]) => `${n} ${why}`).join(', ')}`);
         }
+        // Fire-and-forget: a slow or failed Teamarr generate must not hold up
+        // the next pass, which is why this is not awaited alongside `summary`
+        // above. `triggerGenerateAfterMeasure` records the attempt itself, so
+        // an error here still leaves the debounce state correct.
+        void triggerGenerateAfterMeasure(store, currentConfig(), summary)
+          .then((result) => {
+            if (result.fired) log('teamarr generate: triggered after this pass');
+          })
+          .catch((error) => log(`teamarr generate failed: ${errorText(error)}`));
       }
     } catch (error) {
       // A failed pass must not kill the loop -- the next tick retries.
