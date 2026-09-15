@@ -22,6 +22,14 @@ const RULES_PATH = '/api/v1/settings/stream-ordering';
 /** Teamarr's managed channels, and the streams attached to each. */
 const CHANNELS_PATH = '/api/v1/channels/managed';
 
+/**
+ * Teamarr's full EPG regeneration: M3U refresh, matching, XMLTV output, the
+ * lot. No per-channel or per-event scope exists beyond `team_ids`, which
+ * `generate()` below does not attempt to resolve -- see
+ * `PODIUM_TEAMARR_GENERATE_AFTER_MEASURE`.
+ */
+const GENERATE_PATH = '/api/v1/epg/generate';
+
 /** How long a call may hang before it is treated as a failure. */
 const TIMEOUT_MS = 15_000;
 
@@ -177,7 +185,11 @@ export class TeamarrClient {
     this.base = normaliseBaseUrl(url, 'Teamarr');
   }
 
-  private async call(method: 'GET' | 'PUT', path: string, body?: unknown): Promise<unknown> {
+  private async call(
+    method: 'GET' | 'PUT' | 'POST',
+    path: string,
+    body?: unknown,
+  ): Promise<unknown> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     const target = `${this.base}${path}`;
@@ -269,6 +281,17 @@ export class TeamarrClient {
     }
     const body = (await this.call('PUT', RULES_PATH, { rules })) as { rules?: unknown[] };
     return Array.isArray(body?.rules) ? body.rules.length : rules.length;
+  }
+
+  /**
+   * Ask Teamarr to regenerate its EPG now, rather than on its own schedule.
+   *
+   * Fire-and-forget from the caller's side: Teamarr's own response describes
+   * its generation run, not anything Podium needs to act on, so this resolves
+   * once the request lands rather than once generation completes.
+   */
+  async generate(): Promise<void> {
+    await this.call('POST', GENERATE_PATH, {});
   }
 
   /**
